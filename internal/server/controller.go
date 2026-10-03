@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/hex"
 	"errors"
@@ -114,13 +115,29 @@ func (c *Controller) timeout() time.Duration {
 	return 10 * time.Second
 }
 
-// dialAgent opens an mTLS connection to an enrolled agent.
+// dialAgent opens an mTLS connection to an enrolled agent. Besides the CA
+// chain and the agent's ID, the certificate must be the exact one issued at
+// approval: after an agent is replaced, the old host's certificate (same ID,
+// still within its validity) is refused.
 func (c *Controller) dialAgent(a catalog.Agent) (*grpc.ClientConn, error) {
+	want := a.CertFingerprint
 	cfg := &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{c.ClientCert},
 		RootCAs:      c.CA.Pool(),
 		ServerName:   pki.AgentDNSName(a.ID),
+		// VerifyConnection runs after chain verification, on every
+		// connection including resumed ones.
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			if len(cs.PeerCertificates) == 0 {
+				return errors.New("agent presented no certificate")
+			}
+			got := hex.EncodeToString(pki.Fingerprint(cs.PeerCertificates[0].Raw))
+			if want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+				return errors.New("agent certificate is not the one issued when this agent was approved (replaced or re-registered host?)")
+			}
+			return nil
+		},
 	}
 	return grpc.NewClient(a.Address,
 		grpc.WithTransportCredentials(credentials.NewTLS(cfg)),

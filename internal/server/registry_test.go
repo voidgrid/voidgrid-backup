@@ -410,3 +410,35 @@ func TestAgentsPageApproval(t *testing.T) {
 		t.Fatal("the old token is still shown after rotating")
 	}
 }
+
+func TestReplacedAgentOldCertRefused(t *testing.T) {
+	ctx := context.Background()
+	c := newController(t)
+	oldAgent, oldAddr := startAgent(t, t.TempDir())
+	old, err := enrollTestAgent(t, c, oldAgent, "box", oldAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The host is rebuilt: a new agent (new key) is approved as replacing it.
+	newAgent, newAddr := startAgent(t, t.TempDir())
+	replaced, err := approveTestAgent(t, c, newAgent, "", newAddr, old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replaced.ID != old.ID || newAgent.ID() != old.ID || replaced.Name != "box" || replaced.CertFingerprint == old.CertFingerprint {
+		t.Fatalf("replacement: %+v (new agent ID %q)", replaced, newAgent.ID())
+	}
+
+	// The old host still holds a CA-signed certificate for the same ID. The
+	// server must refuse it now that the record points at the new one.
+	stale := replaced
+	stale.Address = oldAddr
+	if err := c.Check(ctx, stale); err == nil || !strings.Contains(err.Error(), "not the one issued") {
+		t.Fatalf("old certificate after replacement: %v", err)
+	}
+	stale.Address = newAddr
+	if err := c.Check(ctx, stale); err != nil {
+		t.Fatalf("new agent after replacement: %v", err)
+	}
+}

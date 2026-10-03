@@ -111,7 +111,7 @@ func run(c config) error {
 	if id := a.ID(); id != "" {
 		slog.Info("enrolled", "id", id)
 	} else {
-		slog.Info("not enrolled: registering with the server", "server", c.server)
+		slog.Info("not enrolled: registering with the server", "server", c.server, "fingerprint", a.Fingerprint())
 		go func() {
 			err := a.Register(ctx, agent.RegisterConfig{Server: c.server, Token: c.token, ListenPort: lis.Addr().(*net.TCPAddr).Port})
 			if err != nil && ctx.Err() == nil {

@@ -103,7 +103,10 @@ connects to the server's registration listener (`VB_SERVER`), checks the
 server's certificate against the pin inside `VB_TOKEN` (no CA and no domain
 name are involved), and registers. A valid token only makes the agent appear
 under "Waiting for approval" on the Agents page; nothing is granted until you
-approve it. On approval the server issues a certificate for the agent's own
+approve it. The agent logs its key fingerprint
+(`docker compose logs agent | grep fingerprint`); the pending entry shows the
+same value. Compare them before approving: the name shown there is whatever
+the agent says, so anyone else holding the token could pick a familiar one. On approval the server issues a certificate for the agent's own
 key, which the agent installs without a restart. From then on the agent
 requires the server's client certificate for everything, and `VB_SERVER` and
 `VB_TOKEN` are no longer used.

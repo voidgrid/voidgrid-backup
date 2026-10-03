@@ -77,7 +77,12 @@ It reads the same `VB_LISTEN` and probes `/healthz` on loopback.
   reverse proxy. Its certificate is self-signed; the registration token pins it.
   A valid token only creates a pending entry that you approve or reject.
 - After approval the server connects **to** the agent (default port 9443), so
-  the server must be able to reach each agent's address.
+  the server must be able to reach each agent's address. It accepts only the
+  exact certificate issued at approval, so after an agent is replaced the old
+  host's certificate stops working.
+- Wrong-token attempts on the registration port are logged once per source
+  address per minute, followed by one line with the count, so they can't
+  flood the log.
 - Agent traffic is mutual TLS with the server's own CA. An approved agent
   accepts only the server's client certificate.
 - Cross-site form posts are refused (Go's `net/http.CrossOriginProtection`),
@@ -184,7 +189,8 @@ than OIDC being temporarily unavailable.
 ### Agents
 
 Agents register themselves (see [agent.md](agent.md#registration)) and wait
-under **Waiting for approval**. Approve one with a name and the address the
+under **Waiting for approval**. Each entry shows the agent's key fingerprint;
+approve only if it matches the one in that agent's log. Approve one with a name and the address the
 server can reach it on (`host:port`, pre-filled from where it connected and
 the port it reported); the address is editable. Choosing an existing agent
 under **Replaces** makes the new registration take over that agent's ID, jobs

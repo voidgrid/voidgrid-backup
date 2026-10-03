@@ -12,6 +12,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -114,6 +115,14 @@ func New(dir, dockerSocket string) (*Agent, error) {
 
 func (a *Agent) engineDir() string { return filepath.Join(a.dir, "kopia") }
 
+// Fingerprint is the SHA-256 (hex) of the agent's self-signed certificate:
+// what the server's Agents page shows for a pending registration, so an
+// operator can check they are approving this agent and not an impostor that
+// also has the token.
+func (a *Agent) Fingerprint() string {
+	return hex.EncodeToString(pki.Fingerprint(a.bootstrapDER))
+}
+
 // ID returns the server-assigned agent ID, or "" before enrollment.
 func (a *Agent) ID() string {
 	a.mu.Lock()
@@ -141,19 +150,22 @@ func (a *Agent) TLSConfig() *tls.Config {
 				}, nil
 			}
 			return &tls.Config{
-				MinVersion:            tls.VersionTLS13,
-				NextProtos:            []string{"h2"},
-				Certificates:          []tls.Certificate{id.cert},
-				ClientAuth:            tls.RequireAndVerifyClientCert,
-				ClientCAs:             id.cas,
-				VerifyPeerCertificate: requireServerIdentity,
+				MinVersion:   tls.VersionTLS13,
+				NextProtos:   []string{"h2"},
+				Certificates: []tls.Certificate{id.cert},
+				ClientAuth:   tls.RequireAndVerifyClientCert,
+				ClientCAs:    id.cas,
+				// VerifyConnection, not VerifyPeerCertificate: the latter
+				// is skipped on resumed sessions, this runs on every one.
+				VerifyConnection: requireServerIdentity,
 			}, nil
 		},
 	}
 }
 
-func requireServerIdentity(_ [][]byte, chains [][]*x509.Certificate) error {
-	if len(chains) == 0 || chains[0][0].Subject.CommonName != pki.ServerClientCN {
+func requireServerIdentity(cs tls.ConnectionState) error {
+	if len(cs.VerifiedChains) == 0 || len(cs.VerifiedChains[0]) == 0 ||
+		cs.VerifiedChains[0][0].Subject.CommonName != pki.ServerClientCN {
 		return errors.New("client certificate is not the voidgrid-backup server")
 	}
 	return nil

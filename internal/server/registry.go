@@ -104,7 +104,9 @@ func (c *Controller) ServeRegistry(ctx context.Context, lis net.Listener) error 
 		NextProtos: []string{"h2"},
 	})
 	s := grpc.NewServer(grpc.Creds(creds))
-	agentpb.RegisterRegistryServer(s, &registry{c: c})
+	refused := newRefusalLog(time.Minute, slog.Warn)
+	go refused.run(ctx)
+	agentpb.RegisterRegistryServer(s, &registry{c: c, refused: refused})
 	go func() {
 		<-ctx.Done()
 		s.GracefulStop()
@@ -114,7 +116,8 @@ func (c *Controller) ServeRegistry(ctx context.Context, lis net.Listener) error 
 
 type registry struct {
 	agentpb.UnimplementedRegistryServer
-	c *Controller
+	c       *Controller
+	refused *refusalLog // nil logs nothing (tests that build a registry directly)
 }
 
 // peerCert returns the agent's self-signed certificate from the handshake.
@@ -140,7 +143,13 @@ func (r *registry) Register(ctx context.Context, req *agentpb.RegisterRequest) (
 		return nil, status.Errorf(codes.Internal, "load registration secret: %v", err)
 	}
 	if subtle.ConstantTimeCompare(req.GetSecret(), secret) != 1 {
-		slog.Warn("agent registration refused: wrong token", "from", p.Addr.String())
+		if r.refused != nil {
+			src := p.Addr.String()
+			if host, _, err := net.SplitHostPort(src); err == nil {
+				src = host // ports change per connection; count per address
+			}
+			r.refused.record(src, time.Now())
+		}
 		return nil, status.Error(codes.PermissionDenied, "wrong registration token")
 	}
 	port := int(req.GetListenPort())

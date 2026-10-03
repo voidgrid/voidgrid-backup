@@ -121,7 +121,8 @@ func (a *Agent) registerOnce(ctx context.Context, cfg RegisterConfig, tok enroll
 			return false, err
 		}
 		*registered = true
-		slog.Info("registered with the server: approve this agent on the server's Agents page", "server", cfg.Server)
+		slog.Info("registered with the server: approve this agent on the server's Agents page after checking its fingerprint matches",
+			"server", cfg.Server, "fingerprint", a.Fingerprint())
 	}
 
 	cctx, cancel := call()

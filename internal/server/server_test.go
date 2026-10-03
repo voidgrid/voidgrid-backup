@@ -134,6 +134,13 @@ func anonPing(t *testing.T, addr string) error {
 // mTLS, the way an operator's registration and approval end up.
 func enrollTestAgent(t *testing.T, c *Controller, a *agent.Agent, name, addr string) (catalog.Agent, error) {
 	t.Helper()
+	return approveTestAgent(t, c, a, name, addr, "")
+}
+
+// approveTestAgent is enrollTestAgent with a choice of replacing an existing
+// agent (replaceID) instead of adding a new one.
+func approveTestAgent(t *testing.T, c *Controller, a *agent.Agent, name, addr, replaceID string) (catalog.Agent, error) {
+	t.Helper()
 	ctx := context.Background()
 	regAddr := startRegistry(t, c)
 	token, err := c.RegistrationToken(ctx)
@@ -161,7 +168,7 @@ func enrollTestAgent(t *testing.T, c *Controller, a *agent.Agent, name, addr str
 		}
 		return false
 	})
-	ag, err := c.ApproveRegistration(ctx, reg.ID, name, addr, "")
+	ag, err := c.ApproveRegistration(ctx, reg.ID, name, addr, replaceID)
 	if err != nil {
 		return catalog.Agent{}, err
 	}
@@ -279,21 +286,6 @@ func TestHTTP(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "application/json" {
 		t.Fatalf("GET /api/agents = %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
-}
-
-// unwrap digs the gRPC status error out of a wrapped error.
-func unwrap(err error) error {
-	for err != nil {
-		if _, ok := status.FromError(err); ok {
-			return err
-		}
-		u, ok := err.(interface{ Unwrap() error })
-		if !ok {
-			return err
-		}
-		err = u.Unwrap()
-	}
-	return nil
 }
 
 // restoreOK accepts a successful restore, or, when the tests don't run as

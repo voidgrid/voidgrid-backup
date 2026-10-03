@@ -43,8 +43,8 @@
   <p class="hint">These agents presented a valid token. Nothing is granted until you approve one. To bring a wiped or redeployed agent back as an existing one, choose it under "Replaces": it keeps that agent's ID, jobs and snapshots.</p>
   {{range .Pending}}
   <div class="card">
-    <p>{{if .Hostname}}<span class="mono">{{.Hostname}}</span>{{else}}unnamed agent{{end}} · version <span class="mono">{{.Version}}</span> · registered {{ago .CreatedAt}} · key <span class="mono">{{printf "%.16s" .Fingerprint}}</span>
-      {{if eq .Status "rejected"}}· <span class="bad">rejected</span>{{end}}</p>
+    <p>{{if .Hostname}}<span class="mono">{{.Hostname}}</span>{{else}}unnamed agent{{end}} · version <span class="mono">{{.Version}}</span> · registered {{ago .CreatedAt}}{{if eq .Status "rejected"}} · <span class="bad">rejected</span>{{end}}</p>
+    <p class="hint">Fingerprint <span class="mono wrap">{{.Fingerprint}}</span><br>Approve only if it matches the fingerprint in this agent's log.</p>
     {{if eq .Status "rejected"}}
     <form method="post" action="/agents/registrations/{{.ID}}/forget"><div class="actions"><button type="submit">Forget</button></div></form>
     {{else}}
