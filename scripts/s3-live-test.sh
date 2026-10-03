@@ -5,7 +5,7 @@
 # test itself deletes when it's done, pass or fail; nothing else in the
 # bucket is touched, and nothing here is printed.
 #
-# .env must define (see .env.example or the repo's own .env):
+# .env must define (copy env.example at the repo root to .env):
 #   B2_ENDPOINT      host only, no scheme, e.g. s3.us-west-004.backblazeb2.com
 #   B2_BUCKET_NAME   the S3-compatible bucket name (not B2_BUCKET_ID)
 #   B2_KEY_ID        application key ID -> S3 access key ID
@@ -15,8 +15,27 @@
 set -eu
 cd "$(dirname "$0")/.."
 mkdir -p .cache/gopath .cache/gobuild
-[ -f .env ] || { echo ".env not found; see the B2_* names above" >&2; exit 1; }
+if [ ! -f .env ]; then
+  echo "################################################################" >&2
+  echo "## ERROR s3-live-test: .env not found at the repo root" >&2
+  echo "## Run: cp env.example .env, then fill in the S3 section." >&2
+  echo "################################################################" >&2
+  exit 1
+fi
 . ./.env
+
+# env.example ships CHANGEME placeholders. Skip loudly, never silently, if
+# any variable this test reads is still one.
+for v in B2_ENDPOINT B2_BUCKET_NAME B2_BUCKET B2_KEY_ID B2_KEY_KEY B2_REGION; do
+  eval "val=\${$v:-}"
+  if [ "$val" = CHANGEME ]; then
+    echo "################################################################" >&2
+    echo "## SKIPPING s3-live-test: $v is still CHANGEME in .env" >&2
+    echo "## Nothing was tested. Fill in the S3 section to run it." >&2
+    echo "################################################################" >&2
+    exit 0
+  fi
+done
 
 : "${B2_ENDPOINT:?set in .env}"
 bucket="${B2_BUCKET_NAME:-${B2_BUCKET:?set B2_BUCKET_NAME or B2_BUCKET in .env}}"

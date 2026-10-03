@@ -92,6 +92,17 @@ No local Go toolchain is needed: everything runs in containers.
 - CI runs vet and the tests inside the image build and publishes the image
   to `ghcr.io` — the same `docker build` you'd run locally, just automated.
 
+### What the live tests need
+
+The live tests are optional and aren't part of `scripts/go.sh test ./...`; each sits behind a build tag. They all run the Go tests inside a `golang` container, so every one needs Docker and network access to pull images.
+
+- `docker-live-test.sh`: access to the local Docker socket, and the ability to pull `alpine:3`, `postgres:16-alpine`, `mariadb:11.4` and `valkey/valkey:9-alpine`.
+- `libvirt-live-test.sh`: `virsh` and `qemu-img` on the host, and a per-user libvirt session (`qemu:///session`) with its socket under `/run/user/<uid>/libvirt`.
+- `s3-live-test.sh`: a `.env` at the repo root with `B2_ENDPOINT` (host only, no scheme), `B2_BUCKET_NAME`, `B2_KEY_ID` and `B2_KEY_KEY`. The names say B2, but any S3-compatible bucket you can write to works. The region comes from the endpoint's second dot-separated label; set `B2_REGION` to override it.
+- `sftp-live-test.sh`: a `.env` at the repo root with `HETZNER_LINK` (the host), `HETZNER_USER`, `HETZNER_SSH_PORT` (defaults to 22; a Storage Box uses 23) and either `HETZNER_KEY` or `HETZNER_PASSWORD`. `HETZNER_KEY` must be an absolute path to a private key already authorized on the server (a leading `~/` is expanded).
+
+[`env.example`](env.example) lists every name with `CHANGEME` placeholders. It has no leading dot so it shows up in a checkout; copy it to `.env` (`cp env.example .env`) and fill in the section for the destination you want to test. Each script reads only its own section, so you can leave the other one alone: a script whose variables are still `CHANGEME` prints a loud SKIPPING banner, tests nothing and exits 0. The scripts source `.env` as shell, so use plain `KEY=value` lines. The S3 and SFTP tests write only under a fresh per-run prefix or directory and remove it when they finish, pass or fail.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). [Kopia](https://kopia.io/), the storage engine this project embeds, is Apache-2.0; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

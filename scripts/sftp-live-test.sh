@@ -15,8 +15,27 @@
 set -eu
 cd "$(dirname "$0")/.."
 mkdir -p .cache/gopath .cache/gobuild
-[ -f .env ] || { echo ".env not found; see the HETZNER_* names above" >&2; exit 1; }
+if [ ! -f .env ]; then
+  echo "################################################################" >&2
+  echo "## ERROR sftp-live-test: .env not found at the repo root" >&2
+  echo "## Run: cp env.example .env, then fill in the SFTP section." >&2
+  echo "################################################################" >&2
+  exit 1
+fi
 . ./.env
+
+# env.example ships CHANGEME placeholders. Skip loudly, never silently, if
+# any variable this test reads is still one.
+for v in HETZNER_LINK HETZNER_USER HETZNER_SSH_PORT HETZNER_KEY HETZNER_PASSWORD; do
+  eval "val=\${$v:-}"
+  if [ "$val" = CHANGEME ]; then
+    echo "################################################################" >&2
+    echo "## SKIPPING sftp-live-test: $v is still CHANGEME in .env" >&2
+    echo "## Nothing was tested. Fill in the SFTP section to run it." >&2
+    echo "################################################################" >&2
+    exit 0
+  fi
+done
 
 : "${HETZNER_LINK:?set in .env}" "${HETZNER_USER:?set in .env}"
 port="${HETZNER_SSH_PORT:-22}"
