@@ -22,7 +22,15 @@ Also I suck at writing README.md stuff...
 | `voidgrid-backup-agent` | on every host with something to back up | Reads data, talks to Docker and libvirt, writes snapshots to the repository. [docs/agent.md](docs/agent.md) |
 | `voidgrid-backup-recover` | on demand | Break-glass restore straight from a repository: no server, catalog or agent needed. [docs/recovery.md](docs/recovery.md) |
 
-All three binaries ship in one image, `ghcr.io/voidgrid/voidgrid-backup`; the server is the default entrypoint, run the agent with `--entrypoint /usr/local/bin/voidgrid-backup-agent`. The examples below read the image from `VB_IMAGE` in each `.env.example`. Set it to a published tag, for example `VB_IMAGE=ghcr.io/voidgrid/voidgrid-backup:v0.9.0-beta.1`, or build and load one locally (`docker build -t voidgrid-backup:latest .`, then set `VB_IMAGE=voidgrid-backup:latest`).
+All three binaries ship in one image, `ghcr.io/voidgrid/voidgrid-backup`; the server is the default entrypoint, run the agent with `--entrypoint /usr/local/bin/voidgrid-backup-agent`. The examples below read the image from `VB_IMAGE` in each `.env.example`. Set it to a published tag, or build and load one locally (`docker build -t voidgrid-backup:latest .`, then set `VB_IMAGE=voidgrid-backup:latest`).
+
+```sh
+VB_IMAGE=ghcr.io/voidgrid/voidgrid-backup:latest         # newest stable release
+VB_IMAGE=ghcr.io/voidgrid/voidgrid-backup:beta           # newest release of any kind, pre-releases included
+VB_IMAGE=ghcr.io/voidgrid/voidgrid-backup:v0.9.0-beta.1  # one exact version, never moves
+```
+
+Use the same tag for the server and every agent. Beta releases are what's being tested and can change in ways that don't carry over, so give a test install its own data directory and don't point it at backups you care about. To move to a newer image, `docker compose pull && docker compose up -d`.
 
 ## Getting started
 
