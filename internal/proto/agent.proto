@@ -1,0 +1,393 @@
+syntax = "proto3";
+
+package voidgridbackup.agent.v1;
+
+option go_package = "github.com/voidgrid/voidgrid-backup/internal/proto/agentpb";
+
+// Agent is served by every voidgrid-backup-agent. The server dials agents.
+//
+// Enrollment (unenrolled agent, TLS with the agent's self-signed bootstrap
+// cert, no client cert): the operator copies the enrollment code from the
+// agent's log into the server UI. The code carries a one-time secret and a pin
+// of the agent's bootstrap cert, so the server knows it reached that agent and
+// the agent only accepts a server that was given the code.
+//
+// After CompleteEnrollment the agent requires a client cert signed by the
+// server's CA, and refuses the enrollment RPCs.
+service Agent {
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+  rpc CompleteEnrollment(CompleteEnrollmentRequest) returns (CompleteEnrollmentResponse);
+  rpc Ping(PingRequest) returns (PingResponse);
+
+  // Backup repository operations. The server sends the repository config and
+  // password with every call; the agent keeps only a local Kopia cache.
+  rpc InitRepository(InitRepositoryRequest) returns (InitRepositoryResponse);
+  rpc Backup(BackupRequest) returns (BackupResponse);
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+  rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
+  rpc Restore(RestoreRequest) returns (RestoreResponse);
+
+  // Docker compose stacks.
+  rpc ListStacks(ListStacksRequest) returns (ListStacksResponse);
+  rpc RestoreStack(RestoreStackRequest) returns (RestoreResponse);
+  rpc ImportDump(ImportDumpRequest) returns (ImportDumpResponse);
+
+  // libvirt virtual machines.
+  rpc ListVMs(ListVMsRequest) returns (ListVMsResponse);
+  rpc RestoreVM(RestoreVMRequest) returns (RestoreResponse);
+
+  // Repository check: verifies snapshot metadata, that every content blob
+  // exists, and (with ECC on) repairs bitrot found along the way.
+  rpc Check(CheckRequest) returns (CheckResponse);
+
+  // Host filesystem sizes, for choosing what to back up.
+  rpc PathUsage(PathUsageRequest) returns (PathUsageResponse);
+
+  // Space a repository takes in its storage (all Kopia blobs). Lists every
+  // blob, so it is O(blob count): meant to be run on demand and cached.
+  rpc RepoStats(RepoStatsRequest) returns (RepoStatsResponse);
+
+  // The agent's recent log lines, kept in memory (lost when it restarts).
+  rpc Logs(LogsRequest) returns (LogsResponse);
+}
+
+message Repository {
+  string id = 1;
+  // JSON of repocfg.Config, secrets included.
+  bytes config_json = 2;
+  string password = 3;
+}
+
+message InitRepositoryRequest {
+  Repository repository = 1;
+}
+
+message InitRepositoryResponse {
+  // False when the storage already held a repository (the agent connected to it).
+  bool created = 1;
+  // SFTP only: the host key trusted on first use, in known_hosts format.
+  string known_hosts = 2;
+}
+
+message Retention {
+  int32 keep_latest = 1;
+  int32 keep_hourly = 2;
+  int32 keep_daily = 3;
+  int32 keep_weekly = 4;
+  int32 keep_monthly = 5;
+  int32 keep_annual = 6;
+}
+
+message BackupRequest {
+  Repository repository = 1;
+  repeated string paths = 2;
+  repeated string excludes = 3;
+  Retention retention = 4;
+  // Set for a stack job; paths is then empty.
+  StackSpec stack = 5;
+  // Set for a VM job; paths is then empty.
+  VMSpec vm = 6;
+}
+
+message PathResult {
+  string path = 1;
+  string snapshot_id = 2;
+  int64 bytes = 3;
+  int32 files = 4;
+  int32 errors = 5;
+  string error = 6;
+  int32 pruned = 7;
+  // Backed up, but something needs attention (e.g. a failed database dump).
+  repeated string warnings = 8;
+  // What the server's snapshot index records, so it needn't ask the repository.
+  // start_unix is 0 from an agent that predates these fields.
+  int64 start_unix = 9;
+  int64 end_unix = 10;
+  string incomplete = 11;
+  // Snapshots retention deleted as part of this backup.
+  repeated string pruned_ids = 12;
+}
+
+message BackupResponse {
+  repeated PathResult results = 1;
+}
+
+message ListSnapshotsRequest {
+  Repository repository = 1;
+  repeated string paths = 2;
+}
+
+message Snapshot {
+  string id = 1;
+  string path = 2;
+  int64 start_unix = 3;
+  int64 end_unix = 4;
+  int64 bytes = 5;
+  int32 files = 6;
+  int32 errors = 7;
+  string incomplete = 8;
+}
+
+message ListSnapshotsResponse {
+  repeated Snapshot snapshots = 1;
+}
+
+message ListDirectoryRequest {
+  Repository repository = 1;
+  string snapshot_id = 2;
+  // Relative to the snapshot root; "" is the root.
+  string path = 3;
+}
+
+message DirEntry {
+  string name = 1;
+  bool dir = 2;
+  int64 size = 3;
+  int64 mod_unix = 4;
+  uint32 mode = 5;
+}
+
+message ListDirectoryResponse {
+  repeated DirEntry entries = 1;
+}
+
+message RestoreRequest {
+  Repository repository = 1;
+  string snapshot_id = 2;
+  // Relative to the snapshot root; "" restores everything.
+  string path = 3;
+  // Absolute directory on the agent host to restore into.
+  string target = 4;
+  bool overwrite = 5;
+}
+
+message RestoreResponse {
+  int64 bytes = 1;
+  int32 files = 2;
+  int32 dirs = 3;
+  int32 skipped = 4;
+  // Restored, but something needs attention (e.g. ownership not restored).
+  repeated string warnings = 5;
+}
+
+message EnrollRequest {
+  bytes secret = 1;
+  // Identity the server assigns; the agent puts it in its CSR.
+  string agent_id = 2;
+}
+
+message EnrollResponse {
+  // PKCS#10 CSR (DER) over the same key as the bootstrap cert.
+  bytes csr_der = 1;
+  string hostname = 2;
+  string version = 3;
+}
+
+message CompleteEnrollmentRequest {
+  bytes secret = 1;
+  bytes cert_der = 2;
+  bytes ca_der = 3;
+}
+
+message CompleteEnrollmentResponse {}
+
+message PingRequest {}
+
+message PingResponse {
+  string agent_id = 1;
+  string hostname = 2;
+  string version = 3;
+  int64 unix_time = 4;
+  int32 uid = 5;
+  // Capabilities the agent lacks, "CAP_X: cannot ..." (empty when it has all).
+  repeated string missing_capabilities = 6;
+}
+
+message ListStacksRequest {}
+
+message Mount {
+  string type = 1;
+  string source = 2;
+  string destination = 3;
+  bool rw = 4;
+  // The source is mounted read-only inside the agent (in-place restore impossible).
+  bool agent_read_only = 5;
+}
+
+message Service {
+  string name = 1;
+  string container = 2;
+  string image = 3;
+  string state = 4;
+  repeated Mount mounts = 5;
+  // Suggested database dump ("postgres", "mariadb", "redis"), "" if none.
+  string dump_kind = 6;
+  repeated string sqlite_files = 7;
+}
+
+message Stack {
+  string project = 1;
+  string working_dir = 2;
+  repeated string config_files = 3;
+  repeated Service services = 4;
+}
+
+message ListStacksResponse {
+  repeated Stack stacks = 1;
+}
+
+message StackSpec {
+  string project = 1;
+  string working_dir = 2;
+  // Host paths of mounts to back up / leave out.
+  repeated string include = 3;
+  repeated string exclude = 4;
+  // Service name -> dump kind.
+  map<string, string> dumps = 5;
+  // "none", "pause" or "stop" for the app containers while files are read.
+  string quiesce = 6;
+}
+
+message RestoreStackRequest {
+  Repository repository = 1;
+  string snapshot_id = 2;
+  // "" restores to the original locations; otherwise an empty directory
+  // that receives the whole snapshot tree.
+  string target_root = 3;
+  // In-place only: stop the stack's containers during the restore.
+  bool stop_stack = 4;
+}
+
+message ImportDumpRequest {
+  Repository repository = 1;
+  string snapshot_id = 2;
+  string service = 3;
+}
+
+message ImportDumpResponse {
+  string output = 1;
+}
+
+message ListVMsRequest {}
+
+message VMDisk {
+  string target = 1;
+  string device = 2;
+  string type = 3;
+  string source = 4;
+  string format = 5;
+  bool read_only = 6;
+  bool backing = 7;
+  bool backupable = 8;
+  bool agent_read_only = 9;
+}
+
+message VM {
+  string name = 1;
+  string uuid = 2;
+  string state = 3;
+  repeated VMDisk disks = 4;
+}
+
+message ListVMsResponse {
+  repeated VM vms = 1;
+}
+
+message VMSpec {
+  string name = 1;
+  // Disk targets (vda, ...); empty means every backupable disk.
+  repeated string disks = 2;
+  // Freeze guest filesystems through the QEMU guest agent when possible.
+  bool quiesce = 3;
+}
+
+message RestoreVMRequest {
+  Repository repository = 1;
+  string snapshot_id = 2;
+  // "" restores disks to their original paths (the VM must be shut off);
+  // otherwise an empty directory that receives disks/ and domain.xml.
+  string target_dir = 3;
+  // In-place only: define the domain from the saved XML if it no longer exists.
+  bool define = 4;
+}
+
+message CheckRequest {
+  Repository repository = 1;
+  // Percent (0-100) of file contents to download, decrypt and hash. All
+  // snapshot metadata and directory listings are always checked, as is the
+  // existence of every content blob.
+  double verify_percent = 2;
+  // Test-restore the newest snapshot of the smallest source at or under this
+  // cap, and compare file count and size with what it recorded. 0 skips it.
+  int64 test_restore_max_bytes = 3;
+}
+
+message CheckResponse {
+  int32 snapshots = 1;
+  int64 objects_checked = 2;
+  int64 files_read = 3;
+  int64 bytes_read = 4;
+  repeated string errors = 5;
+  string test_restore = 6;       // what was test-restored, "" if skipped
+  string test_restore_error = 7;
+}
+
+message PathUsageRequest {
+  repeated string paths = 1;
+  // Also walk each path to total its files. Filesystem totals are always
+  // returned; the walk is bounded and reports truncated if it hit a limit.
+  bool walk = 2;
+}
+
+message PathUsage {
+  string path = 1;
+  // Set when the path can't be measured (not visible to the agent, refused).
+  string error = 2;
+  // Filesystem holding the path.
+  int64 fs_total = 3;
+  int64 fs_used = 4;
+  int64 fs_avail = 5;
+  // Bytes and file count under the path, on the same filesystem, from the walk.
+  int64 dir_bytes = 6;
+  int64 files = 7;
+  bool walked = 8;
+  bool truncated = 9;
+}
+
+message PathUsageResponse {
+  repeated PathUsage usages = 1;
+}
+
+message RepoStatsRequest {
+  Repository repository = 1;
+}
+
+message RepoStatsResponse {
+  int64 stored_bytes = 1;
+  int64 blobs = 2;
+  // Filesystem repositories only: the volume holding the repository, as the
+  // agent sees it. 0 when unknown (SFTP and S3 report no quota).
+  int64 fs_total = 3;
+  int64 fs_avail = 4;
+}
+
+message LogsRequest {
+  // Lowest level to return, as a Go slog level: -4 debug, 0 info, 4 warn, 8 error.
+  int32 min_level = 1;
+  // Most entries to return, newest kept; 0 means the agent's default.
+  int32 limit = 2;
+}
+
+message LogEntry {
+  uint64 seq = 1;
+  int64 unix_nano = 2;
+  int32 level = 3;
+  string message = 4;
+  // key=value pairs; values of secret-looking keys are already hidden.
+  string attrs = 5;
+}
+
+message LogsResponse {
+  // Oldest first.
+  repeated LogEntry entries = 1;
+}

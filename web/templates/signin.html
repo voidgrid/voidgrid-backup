@@ -1,0 +1,12 @@
+{{define "signin"}}{{template "top" .}}
+  <h2>Sign in</h2>
+  <div class="card" style="padding:16px">
+    {{if .OIDCEnabled}}
+    <p><a href="/auth/start">Sign in with SSO &rarr;</a></p>
+    <p class="hint">Provider unreachable? <a href="/auth/recovery">Use a recovery code</a> instead.</p>
+    {{else}}
+    <p><a href="/auth/recovery">Sign in with a recovery code &rarr;</a></p>
+    <p class="hint">No SSO provider is configured for this server.</p>
+    {{end}}
+  </div>
+{{template "bottom" .}}{{end}}

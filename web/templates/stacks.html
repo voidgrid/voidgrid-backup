@@ -1,0 +1,94 @@
+{{define "stacks"}}{{template "top" .}}
+  <h2>Compose stacks on {{.Agent.Name}}</h2>
+  <p class="hint">A stack job snapshots the compose directory (compose file, .env, anything inside it), the mounts you tick,
+    and a dump of each database you pick. Database containers are dumped, never paused; with pause or stop the other containers
+    are frozen only while files are read, then resumed. Mounts of a dumped database are unticked by default: the dump is the consistent copy.</p>
+  {{$agent := .Agent}}{{$repos := .Repos}}{{$keep := .Keep}}
+  {{if not .Stacks}}{{if not .Error}}<div class="card"><div class="empty">No compose stacks found on this host.</div></div>{{end}}{{end}}
+  {{range .Stacks}}
+  <h2>{{.Stack.Project}} <span class="muted mono">{{.Stack.WorkingDir}}</span></h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Service</th><th>Image</th><th>State</th><th>Detected</th></tr></thead>
+      <tbody>
+      {{range .Stack.Services}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td class="mono">{{.Image}}</td>
+          <td><span class="{{if eq .State "running"}}ok{{else}}warn{{end}}">{{.State}}</span></td>
+          <td>{{if .DumpKind}}{{.DumpKind}} database{{end}}{{if .SqliteFiles}} SQLite: <span class="mono">{{join .SqliteFiles ", "}}</span>{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{if .Existing}}
+    <p class="hint">Already backed up by job <strong>{{.Existing}}</strong>.</p>
+  {{else if not $repos}}
+    <p class="hint">Add a repository first.</p>
+  {{else}}
+  <div class="card" style="margin-top:10px">
+    <form class="grid" method="post" action="/jobs/stack">
+      <input type="hidden" name="agent" value="{{$agent.ID}}">
+      <input type="hidden" name="project" value="{{.Stack.Project}}">
+      <input type="hidden" name="working_dir" value="{{.Stack.WorkingDir}}">
+      <label>Job name <input name="name" value="{{.Stack.Project}}" required></label>
+      <label>Repository <select name="repository">{{range $repos}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+
+      {{if .Mounts}}
+      <fieldset>
+        <legend>Mounts to back up</legend>
+        <p class="hint wide">Ticked mounts are backed up; unticked ones are left out. A mount inside the compose directory is already part of the stack directory, so it is backed up with it, and unticking it leaves it out. Database data directories and system paths start unticked: the dump is the consistent copy of a database, and system files belong to the host.</p>
+        <table class="sizes">
+          <thead><tr><th class="tick"></th><th>Mount</th><th class="col-by">Used by</th><th class="num col-size">Size</th><th class="num col-files">Files</th></tr></thead>
+          <tbody>
+          {{range .Mounts}}
+            <tr data-usage data-agent="{{$agent.ID}}" data-path="{{.Source}}">
+              <td class="tick"><input type="hidden" name="mount" value="{{.Source}}"><input type="checkbox" name="include" value="{{.Source}}" {{if .Default}}checked{{end}}></td>
+              <td class="mono">{{.Source}}{{if .Inside}}<span class="note muted">inside the compose directory</span>{{end}}{{if .ReadOnly}}<span class="note muted">read-only in the agent: restore it elsewhere</span>{{end}}</td>
+              <td class="muted">{{.Services}}</td>
+              <td class="num" data-size></td>
+              <td class="num" data-files></td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </fieldset>
+      {{end}}
+
+      {{if .Dumps}}
+      <fieldset>
+        <legend>Database dumps</legend>
+        {{range .Dumps}}
+          <label>{{.Service}} <span class="muted">detected {{.Suggested}}</span>
+            <select name="dump:{{.Service}}">
+              {{$def := .Default}}
+              {{range $k := list "none" "postgres" "mariadb" "redis"}}<option value="{{$k}}" {{if eq $k $def}}selected{{end}}>{{$k}}</option>{{end}}
+            </select></label>
+        {{end}}
+      </fieldset>
+      {{end}}
+
+      <label>While reading files
+        <select name="quiesce">
+          <option value="none" {{if eq .Quiesce "none"}}selected{{end}}>leave containers running</option>
+          <option value="pause" {{if eq .Quiesce "pause"}}selected{{end}}>pause them (recommended with SQLite)</option>
+          <option value="stop" {{if eq .Quiesce "stop"}}selected{{end}}>stop them</option>
+        </select></label>
+      <label>Schedule <input name="schedule" class="mono" value="0 3 * * *"></label>
+      <label class="wide">Extra excludes, one per line <textarea name="excludes" placeholder="*.log&#10;/stack/cache/"></textarea></label>
+      <div class="keep">
+        <label>Keep latest <input name="keep_latest" value="{{$keep.Latest}}"></label>
+        <label>Hourly <input name="keep_hourly" value="{{$keep.Hourly}}"></label>
+        <label>Daily <input name="keep_daily" value="{{$keep.Daily}}"></label>
+        <label>Weekly <input name="keep_weekly" value="{{$keep.Weekly}}"></label>
+        <label>Monthly <input name="keep_monthly" value="{{$keep.Monthly}}"></label>
+        <label>Annual <input name="keep_annual" value="{{$keep.Annual}}"></label>
+      </div>
+      <label class="check wide"><input type="checkbox" name="enabled" checked> Schedule enabled</label>
+      <div class="actions"><button type="submit">Create stack job</button></div>
+    </form>
+  </div>
+  {{end}}
+  {{end}}
+{{template "bottom" .}}{{end}}

@@ -1,0 +1,221 @@
+{{define "top"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · voidgrid-backup</title>
+<style>
+  /* Theme tokens. Every colour, the font and the corner radius on every page come
+     from here, so a change to this block restyles the whole UI. One theme: green
+     on black, like a terminal. Status colours stay red and amber so a failure never
+     reads as success. */
+  :root {
+    color-scheme: dark;
+    --bg: #000000;        /* page */
+    --card: #040a05;      /* panels, tables */
+    --fg: #33ff66;        /* text */
+    --muted: #1fa84a;     /* secondary text, table headers */
+    --line: #0f4a22;      /* borders, dividers */
+    --accent: #00ff66;    /* links, buttons, focus */
+    --on-accent: #000000; /* text on an accent-coloured button */
+    --ok: #33ff66;
+    --bad: #ff5555;
+    --warn: #ffb000;
+    --notice: #06210d;    /* info banner */
+    --font: ui-monospace, "JetBrains Mono", "Fira Code", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --radius: 2px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 14px/1.5 var(--font); }
+  ::selection { background: var(--accent); color: var(--on-accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+  header { padding: 12px 24px; border-bottom: 1px solid var(--line); display: flex; gap: 24px;
+           align-items: baseline; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; }
+  header nav { display: flex; gap: 16px; }
+  header nav a { color: var(--muted); } header nav a.on { color: var(--fg); font-weight: 600; }
+  header .ver { margin-left: auto; color: var(--muted); font-size: 13px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  h2 { font-size: 15px; margin: 28px 0 10px; }
+  h2:first-child { margin-top: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--font); font-size: 13px; }
+  .ok, .success { color: var(--ok); } .bad, .failed { color: var(--bad); } .warn, .partial, .running { color: var(--warn); }
+  .muted { color: var(--muted); }
+  .wrap { white-space: pre-wrap; }
+  .err { white-space: pre-wrap; color: var(--bad); font-size: 13px; }
+  .empty { padding: 16px 14px; color: var(--muted); }
+  form.grid { padding: 16px; display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
+  form.grid .wide, form.grid fieldset, form.grid .actions { grid-column: 1 / -1; }
+  fieldset { border: 1px dashed var(--line); border-radius: var(--radius); padding: 10px 12px 12px;
+             display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); }
+  fieldset legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
+  fieldset .wide { grid-column: 1 / -1; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  label.check { display: flex; gap: 8px; align-items: center; color: var(--fg); }
+  input, select, textarea { font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--radius);
+          background: var(--bg); color: var(--fg); }
+  textarea { font-family: var(--font); font-size: 13px; min-height: 64px; }
+  table.sizes { grid-column: 1 / -1; width: 100%; table-layout: fixed; }
+  table.sizes th, table.sizes td { padding: 6px 8px; white-space: normal; overflow-wrap: anywhere; vertical-align: middle; }
+  table.sizes .tick { width: 32px; }
+  table.sizes .col-size { width: 130px; } table.sizes .col-files { width: 110px; }
+  table.sizes .col-by { width: 22%; }
+  table.sizes th.num { text-align: right; }
+  table.sizes td .note { display: block; font-size: 12px; }
+  .keep { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; grid-column: 1 / -1; }
+  button { font: inherit; padding: 7px 16px; border: 0; border-radius: var(--radius); background: var(--accent);
+           color: var(--on-accent); cursor: pointer; font-weight: 600; }
+  button.plain { background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: normal; }
+  button.plain:hover { border-color: var(--accent); }
+  button.danger { background: var(--bad); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .alert { border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; white-space: pre-wrap; }
+  .notice { background: var(--notice); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; }
+  .secret { border: 2px solid var(--warn); border-radius: var(--radius); padding: 14px; margin-bottom: 16px; }
+  .secret code { display: block; font-size: 17px; margin: 8px 0; user-select: all; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; padding: 14px; margin: 0; }
+  dt { color: var(--muted); font-size: 13px; } dd { margin: 0; }
+  @media (max-width: 700px) {
+    form.grid, fieldset { grid-template-columns: 1fr; } .keep { grid-template-columns: repeat(3, 1fr); }
+    main { padding: 16px; } header { padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>voidgrid-backup</h1>
+  <nav>
+    <a href="/" {{if eq .Nav "agents"}}class="on"{{end}}>Agents</a>
+    <a href="/repositories" {{if eq .Nav "repos"}}class="on"{{end}}>Repositories</a>
+    <a href="/jobs" {{if eq .Nav "jobs"}}class="on"{{end}}>Jobs</a>
+    <a href="/logs" {{if eq .Nav "logs"}}class="on"{{end}}>Logs</a>
+    <a href="/notifications" {{if eq .Nav "notifications"}}class="on"{{end}}>Notifications</a>
+    <a href="/authentication" {{if eq .Nav "authentication"}}class="on"{{end}}>Authentication</a>
+  </nav>
+  {{if .User}}<span class="row" style="margin-left:auto">
+    <span class="muted">{{.User}}</span>
+    <form method="post" action="/auth/logout"><button class="plain" type="submit">Sign out</button></form>
+  </span>{{end}}
+  <span class="ver"{{if .User}} style="margin-left:0"{{end}}>{{.Version}}</span>
+</header>
+<main>
+  {{if .Notice}}<div class="notice">{{.Notice}}</div>{{end}}
+  {{if .Error}}<div class="alert">{{.Error}}</div>{{end}}
+{{end}}
+
+{{define "bottom"}}
+</main>
+<script>
+// Live regions. A page marks the parts that change with ids and adds
+// <div id="live" data-ids="a,b" data-every="3000">. Every `every` ms (not while
+// the tab is hidden) the page is fetched again and only those parts are swapped
+// in, so nothing else moves and no reload happens. The fetched page decides
+// whether to keep going: when it has no #live, the refreshing stops.
+(function () {
+  function every() { var l = document.getElementById("live"); return (l && parseInt(l.dataset.every, 10)) || 5000; }
+  function tick() {
+    var live = document.getElementById("live");
+    if (!live) return;
+    var again = function () { if (document.getElementById("live")) setTimeout(tick, every()); };
+    if (document.hidden) { again(); return; }
+    fetch(location.pathname + location.search, { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error("status " + r.status)); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, "text/html");
+        live.dataset.ids.split(",").forEach(function (id) {
+          var fresh = doc.getElementById(id), old = document.getElementById(id);
+          if (fresh && old) old.replaceWith(fresh);
+        });
+        var next = doc.getElementById("live");
+        if (next) live.replaceWith(next); else live.remove();
+      })
+      .catch(function () {})
+      .then(again);
+  }
+  if (document.getElementById("live")) setTimeout(tick, every());
+})();
+</script>
+<script>
+// Sizes are measured on the agent (a bounded walk) and filled in after the page
+// loads, so the page itself never waits on a big directory. A row is any element
+// with data-usage, data-agent and data-path, holding a [data-size] and a
+// [data-files] cell. All text goes in via textContent.
+(function () {
+  function fill(row, d) {
+    var size = row.querySelector("[data-size]"), files = row.querySelector("[data-files]");
+    size.title = ""; size.classList.remove("err");
+    if (d.error) {
+      size.textContent = "unavailable"; size.title = d.error; size.classList.add("muted");
+      files.textContent = "-";
+      return;
+    }
+    size.textContent = d.size || "-";
+    files.textContent = d.files.toLocaleString() + (d.truncated ? "+" : "");
+  }
+  function measure(agent, path, row) {
+    row.querySelector("[data-size]").textContent = "measuring…";
+    row.querySelector("[data-files]").textContent = "";
+    var url = "/api/agents/" + encodeURIComponent(agent) + "/usage?walk=1&path=" + encodeURIComponent(path);
+    return fetch(url, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { fill(row, d); })
+      .catch(function () { fill(row, { error: "could not measure", files: 0 }); });
+  }
+  // At most two walks at once so a stack with many mounts doesn't hammer the host.
+  function run(jobs) {
+    var next = 0;
+    function worker() {
+      if (next >= jobs.length) return;
+      var j = jobs[next++];
+      measure(j[0], j[1], j[2]).then(worker);
+    }
+    worker(); worker();
+  }
+  var rows = document.querySelectorAll("[data-usage]");
+  run(Array.prototype.map.call(rows, function (el) { return [el.dataset.agent, el.dataset.path, el]; }));
+
+  function cell(tag, text, cls) {
+    var c = document.createElement(tag);
+    if (text) c.textContent = text;
+    if (cls) c.className = cls;
+    return c;
+  }
+  var btn = document.getElementById("check-sizes");
+  if (btn) btn.addEventListener("click", function () {
+    var form = btn.form, out = document.getElementById("path-sizes");
+    out.textContent = "";
+    var jobs = [];
+    var table = cell("table", "", "sizes"), head = document.createElement("tr");
+    head.appendChild(cell("th", "Path"));
+    head.appendChild(cell("th", "Size", "num col-size"));
+    head.appendChild(cell("th", "Files", "num col-files"));
+    table.appendChild(head);
+    form.elements.paths.value.split("\n").forEach(function (p) {
+      p = p.trim();
+      if (!p) return;
+      var tr = document.createElement("tr");
+      tr.appendChild(cell("td", p, "mono"));
+      var size = cell("td", "", "num"), files = cell("td", "", "num");
+      size.setAttribute("data-size", ""); files.setAttribute("data-files", "");
+      tr.appendChild(size); tr.appendChild(files);
+      table.appendChild(tr);
+      jobs.push([form.elements.agent.value, p, tr]);
+    });
+    if (!jobs.length) return;
+    out.appendChild(table);
+    run(jobs);
+  });
+})();
+</script>
+</body>
+</html>
+{{end}}

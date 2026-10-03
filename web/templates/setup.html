@@ -1,0 +1,54 @@
+{{define "setup"}}{{template "top" .}}
+  {{if .Codes}}
+  <div class="secret">
+    <strong>Record these 10 recovery codes now.</strong> Each works once, to sign in without an OIDC
+    provider &mdash; the only way in at all if none is configured, or the way in if one is and it's ever
+    unreachable or misconfigured. Generating a new batch (below, any time you're signed in) invalidates
+    every code in this one. They will not be shown again: store them somewhere that does not depend on this
+    server or its hosts (a password manager, or paper).
+    <ul class="mono" style="margin:8px 0">{{range .Codes}}<li>{{.}}</li>{{end}}</ul>
+  </div>
+  {{if .InitialSetup}}
+  <p><a href="/auth/login">Continue to sign in</a></p>
+  {{end}}
+  {{else if .Done}}
+  <h2>Recovery codes</h2>
+  <div class="card">
+    <p>{{.Remaining}} of {{.Total}} recovery codes remain unused. Each works once, to sign in without an
+      OIDC provider.</p>
+    <form method="post" action="/setup">
+      <p class="hint">Generating a new batch immediately invalidates every code in the current one, used or not.</p>
+      <div class="actions"><button class="danger" type="submit">Generate 10 new recovery codes</button></div>
+    </form>
+  </div>
+  <p class="hint"><a href="/authentication">Manage OIDC sign-in</a></p>
+  {{else}}
+  <h2>Finish setup</h2>
+  <div class="card">
+    <p>Signing in is required, and there's nothing to sign in with yet. Generate your 10 one-time recovery
+      codes to finish setup and unlock sign-in. Find the setup token in the server's own log output (printed
+      at startup, next to <code>setup_token</code>).</p>
+    <form class="grid" method="post" action="/setup">
+      <label class="wide">Setup token <input name="token" autocomplete="off"></label>
+
+      {{if .OIDCManagedByFlags}}
+      <p class="hint wide">OIDC is set by <code>VB_OIDC_*</code> environment variables on this server.</p>
+      {{else}}
+      <fieldset>
+        <legend>OIDC (optional &mdash; can also be added later, at /authentication)</legend>
+        <label class="check wide"><input type="checkbox" name="oidc_enabled" {{if .OIDCForm.Get "oidc_enabled"}}checked{{end}}> Enabled</label>
+        <label class="wide">Issuer URL <input name="oidc_issuer" value="{{.OIDCForm.Get "oidc_issuer"}}" placeholder="https://auth.example.com"></label>
+        <label>Client ID <input name="oidc_client_id" value="{{.OIDCForm.Get "oidc_client_id"}}"></label>
+        <label>Client secret <input name="oidc_client_secret" type="password" autocomplete="off"></label>
+        <label class="wide">Redirect URL, exactly as registered with the provider
+          <input name="oidc_redirect_url" value="{{.OIDCForm.Get "oidc_redirect_url"}}" placeholder="https://backup.example.com/auth/callback"></label>
+        <label class="wide">Allowed identities, comma-separated (empty allows anyone the provider authenticates)
+          <input name="oidc_allowed_emails" value="{{.OIDCForm.Get "oidc_allowed_emails"}}" placeholder="you@example.com"></label>
+      </fieldset>
+      {{end}}
+
+      <div class="actions"><button type="submit">Finish setup</button></div>
+    </form>
+  </div>
+  {{end}}
+{{template "bottom" .}}{{end}}

@@ -1,0 +1,93 @@
+{{define "repositories"}}{{template "top" .}}
+  {{if .Generated}}
+  <div class="secret">
+    <strong>Record this password for "{{.Created}}" now.</strong> It is the only key to the backups:
+    without it nothing in this repository can be restored, and it will not be shown again.
+    <code>{{.Generated}}</code>
+    Store it somewhere that does not depend on this server or its hosts (a password manager, or paper) —
+    along with the host/bucket, path, user and key or credentials you just entered below. If this server
+    is ever gone, that's everything <code>voidgrid-backup-recover</code> (see docs/recovery.md) needs to
+    restore straight from storage; the password alone isn't enough.
+  </div>
+  {{end}}
+
+  <h2>Repositories</h2>
+  <div id="repo-table">
+  <div class="card">
+    {{if .Repos}}
+    <table>
+      <thead><tr><th>Name</th><th>Kind</th><th>Location</th><th>Bitrot ECC</th><th>Jobs</th><th>Stored</th><th>Initialized</th></tr></thead>
+      <tbody>
+      {{range .Repos}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{.Config.Kind}}</td>
+          <td class="mono">{{.Location}}</td>
+          <td>{{if .Config.ECC}}<span class="ok">on</span>{{else}}<span class="muted">off</span>{{end}}</td>
+          <td class="num">{{.Jobs}}</td>
+          <td>
+            {{if .Measuring}}<span class="running">measuring…</span> {{end}}{{if .Stats}}{{bytes .Stats.StoredBytes}} <span class="muted">in {{.Stats.Blobs}} blobs{{if .Stats.FSTotal}}, {{bytes .Stats.FSAvail}} free of {{bytes .Stats.FSTotal}}{{end}}, {{when .Stats.At}}</span>{{else}}<span class="muted">not measured</span>{{end}}
+            {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/stats" style="display:inline"><button class="plain" type="submit" {{if .Measuring}}disabled{{end}}>{{if .Stats}}Refresh{{else}}Measure{{end}}</button></form>{{end}}
+          </td>
+          <td>{{if .InitializedAt.IsZero}}<span class="warn">no</span>{{else}}{{when .InitializedAt}}{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No repositories yet.</div>{{end}}
+  </div>
+  </div>
+  {{if .Measuring}}<div id="live" data-ids="repo-table" data-every="3000" hidden></div>{{end}}
+
+  <h2>Add a repository</h2>
+  <p class="hint">The chosen agent creates the repository (or connects to one already at that location) and becomes its maintenance owner. Only the fields for the selected kind are used.</p>
+  {{if not .Agents}}<div class="card"><div class="empty">Enroll an agent first.</div></div>{{else}}
+  <div class="card">
+    <form class="grid" method="post" action="/repositories">
+      <label>Name <input name="name" value="{{.Form.Get "name"}}" required></label>
+      <label>Kind
+        <select name="kind">
+          <option value="sftp" {{if eq (.Form.Get "kind") "sftp"}}selected{{end}}>SFTP (Hetzner Storage Box)</option>
+          <option value="s3" {{if eq (.Form.Get "kind") "s3"}}selected{{end}}>S3</option>
+          <option value="filesystem" {{if eq (.Form.Get "kind") "filesystem"}}selected{{end}}>Filesystem on the agent</option>
+        </select>
+      </label>
+      <label>Initialize on agent
+        <select name="agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+      </label>
+      <label>Repository password <input name="password" type="password" autocomplete="new-password" placeholder="leave blank to generate one"></label>
+      <label class="check wide"><input type="checkbox" name="ecc" {{if .Form.Get "ecc"}}checked{{end}}> Reed-Solomon error correction (bitrot protection, ~2% overhead; can't be added later)</label>
+
+      <fieldset>
+        <legend>SFTP</legend>
+        <label>Host <input name="sftp_host" value="{{.Form.Get "sftp_host"}}" placeholder="uXXXXX.your-storagebox.de"></label>
+        <label>Port <input name="sftp_port" value="{{.Form.Get "sftp_port"}}"></label>
+        <label>User <input name="sftp_user" value="{{.Form.Get "sftp_user"}}"></label>
+        <label>Path <input name="sftp_path" value="{{.Form.Get "sftp_path"}}" placeholder="backups/homelab"></label>
+        <label>Private key file (path on the agent) <input name="sftp_key_file" value="{{.Form.Get "sftp_key_file"}}" placeholder="/keys/id_ecdsa"></label>
+        <label>or password <input name="sftp_password" type="password" autocomplete="off"></label>
+        <label class="wide">known_hosts (blank: trust the key the agent sees on first connect, then pin it)
+          <textarea name="sftp_known_hosts">{{.Form.Get "sftp_known_hosts"}}</textarea></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>S3</legend>
+        <label>Endpoint <input name="s3_endpoint" value="{{.Form.Get "s3_endpoint"}}" placeholder="s3.example.com"></label>
+        <label>Bucket <input name="s3_bucket" value="{{.Form.Get "s3_bucket"}}"></label>
+        <label>Prefix <input name="s3_prefix" value="{{.Form.Get "s3_prefix"}}"></label>
+        <label>Region <input name="s3_region" value="{{.Form.Get "s3_region"}}"></label>
+        <label>Access key ID <input name="s3_access_key" value="{{.Form.Get "s3_access_key"}}"></label>
+        <label>Secret access key <input name="s3_secret" type="password" autocomplete="off"></label>
+        <label class="check wide"><input type="checkbox" name="s3_insecure" {{if .Form.Get "s3_insecure"}}checked{{end}}> Plain HTTP (local test server only)</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Filesystem</legend>
+        <label class="wide">Directory on the agent host <input name="fs_path" value="{{.Form.Get "fs_path"}}" placeholder="/mnt/backup/homelab"></label>
+      </fieldset>
+
+      <div class="actions"><button type="submit">Create repository</button></div>
+    </form>
+  </div>
+  {{end}}
+{{template "bottom" .}}{{end}}

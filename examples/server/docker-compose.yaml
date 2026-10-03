@@ -1,0 +1,29 @@
+# voidgrid-backup-server example. See docs/server.md.
+# Signing in is always required: visit /setup on first start. Set the
+# VB_OIDC_* variables in .env to also offer SSO through a provider you
+# already run or trust; without them, a recovery code is the only way in.
+services:
+  server:
+    image: ${VB_IMAGE}
+    container_name: voidgrid-backup-server
+    restart: unless-stopped
+    user: "${VB_UID}:${VB_GID}"
+    env_file: .env
+    environment:
+      VB_LISTEN: ":8080"
+      VB_DATA: /data
+    ports:
+      - "${VB_PORT}:8080"
+    volumes:
+      # Catalog (catalog.db) and the CA that agents trust (pki/). Losing pki/
+      # means re-enrolling every agent; back this directory up.
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/voidgrid-backup-server", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]

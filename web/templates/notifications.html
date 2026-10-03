@@ -1,0 +1,65 @@
+{{define "notifications"}}{{template "top" .}}
+  <h2>Notifications</h2>
+  <p class="hint">Sent only for a <strong>scheduled</strong> job that finishes partial or failed &mdash; a manual run
+    is one you're already watching, and a success needs no attention. Leave a secret field (webhook URL, API key,
+    password) blank when saving to keep whatever is already stored for that channel; uncheck "enabled" to turn a
+    channel off without losing its settings.</p>
+
+  {{if .TestResults}}
+  <div class="card" style="margin-bottom:16px">
+    <table>
+      <thead><tr><th>Channel</th><th>Result</th></tr></thead>
+      <tbody>
+      {{range .TestResults}}
+        <tr><td>{{.Channel}}</td><td>{{if .Err}}<span class="bad">{{.Err}}</span>{{else}}<span class="ok">sent</span>{{end}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+  {{if .TestError}}<div class="notice">{{.TestError}}</div>{{end}}
+
+  <div class="card">
+    <form class="grid" method="post" action="/notifications">
+      <label class="wide">This server's base URL (for a link back to the job, optional)
+        <input name="url" value="{{.Form.Get "url"}}" placeholder="https://backup.example.com"></label>
+
+      <fieldset>
+        <legend>Discord (direct webhook)</legend>
+        <label class="check wide"><input type="checkbox" name="discord_enabled" {{if .Form.Get "discord_enabled"}}checked{{end}}> Enabled</label>
+        <label class="wide">Webhook URL {{if .Cfg.Discord}}<span class="muted">(configured; leave blank to keep it)</span>{{end}}
+          <input name="discord_webhook_url" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/..."></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Notifarr</legend>
+        <label class="check wide"><input type="checkbox" name="notifarr_enabled" {{if .Form.Get "notifarr_enabled"}}checked{{end}}> Enabled</label>
+        <label>API key {{if .Cfg.Notifarr}}<span class="muted">(configured; leave blank to keep it)</span>{{end}}
+          <input name="notifarr_api_key" type="password" autocomplete="off"></label>
+        <label>Discord channel ID <input name="notifarr_channel_id" value="{{.Form.Get "notifarr_channel_id"}}" placeholder="123456789012345678"></label>
+        <label>Embed color (hex, optional) <input name="notifarr_color" value="{{.Form.Get "notifarr_color"}}" placeholder="b3261e"></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Email</legend>
+        <label class="check wide"><input type="checkbox" name="email_enabled" {{if .Form.Get "email_enabled"}}checked{{end}}> Enabled</label>
+        <label>SMTP host <input name="email_host" value="{{.Form.Get "email_host"}}"></label>
+        <label>Port <input name="email_port" value="{{.Form.Get "email_port"}}"></label>
+        <label class="check"><input type="checkbox" name="email_implicit_tls" {{if .Form.Get "email_implicit_tls"}}checked{{end}}> Implicit TLS (port 465; otherwise STARTTLS is used if the server offers it)</label>
+        <label>Username (optional) <input name="email_username" value="{{.Form.Get "email_username"}}" autocomplete="off"></label>
+        <label>Password {{if .Cfg.Email}}<span class="muted">(configured; leave blank to keep it)</span>{{end}}
+          <input name="email_password" type="password" autocomplete="off"></label>
+        <label>From address <input name="email_from" value="{{.Form.Get "email_from"}}"></label>
+        <label class="wide">To address(es), comma-separated <input name="email_to" value="{{.Form.Get "email_to"}}"></label>
+      </fieldset>
+
+      <div class="actions"><button type="submit">Save</button></div>
+    </form>
+  </div>
+
+  <h2>Test</h2>
+  <div class="card">
+    <p class="hint">Sends one test message to every enabled channel above (whatever is currently saved, not this form's unsaved edits) and reports each result.</p>
+    <form method="post" action="/notifications/test"><button class="plain" type="submit">Send test notification</button></form>
+  </div>
+{{template "bottom" .}}{{end}}

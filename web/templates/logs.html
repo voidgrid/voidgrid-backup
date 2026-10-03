@@ -1,0 +1,32 @@
+{{define "logs"}}{{template "top" .}}
+  <h2>Logs</h2>
+  <p class="hint">The most recent lines each process has logged, newest first. They are kept in memory, so a restart clears them; <span class="mono">docker logs</span> still has the full output. Values of keys that look like secrets are hidden.</p>
+  <form class="row" method="get" action="/logs" style="margin-bottom:12px">
+    <label>Source
+      <select name="source">{{range .Sources}}<option value="{{.ID}}" {{if .Selected}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    <label>Show
+      <select name="level">{{range .Levels}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+    <label>Lines <input name="limit" value="{{.Limit}}" size="5"></label>
+    <label class="check"><input type="checkbox" name="auto" value="1" {{if .Auto}}checked{{end}}> Refresh every 5 s</label>
+    <button type="submit">Show</button>
+  </form>
+  <div id="log-lines">
+  <div class="card">
+    {{if .Lines}}
+    <table>
+      <thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead>
+      <tbody>
+      {{range .Lines}}
+        <tr>
+          <td class="mono">{{.Time.Local.Format "2006-01-02 15:04:05"}}</td>
+          <td class="{{if ge .Level 8}}bad{{else if ge .Level 4}}warn{{else}}muted{{end}}">{{.Level}}</td>
+          <td class="wrap">{{.Message}}{{if .Attrs}} <span class="muted mono">{{.Attrs}}</span>{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else if not .Error}}<div class="empty">No log lines at this level.</div>{{end}}
+  </div>
+  </div>
+  {{if .Auto}}<div id="live" data-ids="log-lines" data-every="5000" hidden></div>{{end}}
+{{template "bottom" .}}{{end}}

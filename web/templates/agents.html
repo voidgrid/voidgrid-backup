@@ -1,0 +1,38 @@
+{{define "agents"}}{{template "top" .}}
+  <h2>Agents</h2>
+  <div id="agents-table">
+  <div class="card">
+    {{if .Agents}}
+    <table>
+      <thead><tr><th>Name</th><th>Status</th><th>Address</th><th>Hostname</th><th>Version</th><th>Last seen</th></tr></thead>
+      <tbody>
+      {{range .Agents}}
+        <tr>
+          <td>{{.Name}} · <a href="/agents/{{.ID}}/stacks">stacks</a> · <a href="/agents/{{.ID}}/vms">VMs</a></td>
+          <td>{{if .LastError}}<span class="bad">unreachable</span>{{else if .LastSeen.IsZero}}<span class="warn">pending</span>{{else}}<span class="ok">ok</span>{{end}}</td>
+          <td class="mono">{{.Address}}</td>
+          <td>{{.Hostname}}</td>
+          <td class="mono">{{.Version}}</td>
+          <td>{{ago .LastSeen}}</td>
+        </tr>
+        {{if .LastError}}<tr><td></td><td colspan="5" class="err">{{.LastError}}</td></tr>{{end}}
+        {{if .Warnings}}<tr><td></td><td colspan="5" class="warn wrap">{{join .Warnings "\n"}}</td></tr>{{end}}
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No agents enrolled yet.</div>{{end}}
+  </div>
+  </div>
+  {{if .Agents}}<div id="live" data-ids="agents-table" data-every="15000" hidden></div>{{end}}
+
+  <h2>Enroll an agent</h2>
+  <p class="hint">Start the agent, copy the enrollment code from its log, and enter it with the address the server can reach it on.</p>
+  <div class="card">
+    <form class="grid" method="post" action="/agents">
+      <label>Name <input name="name" value="{{.Name}}" required></label>
+      <label>Address <input name="address" value="{{.Address}}" placeholder="192.0.2.10:9443" required></label>
+      <label class="wide">Enrollment code <input name="code" class="mono" autocomplete="off" required></label>
+      <div class="actions"><button type="submit">Enroll</button></div>
+    </form>
+  </div>
+{{template "bottom" .}}{{end}}

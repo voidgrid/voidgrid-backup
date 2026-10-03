@@ -1,0 +1,34 @@
+{{define "authentication"}}{{template "top" .}}
+  <h2>Authentication</h2>
+
+  {{if .ManagedByFlags}}
+  <div class="card">
+    <p>OIDC is set by <code>VB_OIDC_*</code> environment variables on this server, so it isn't editable here.
+      Remove them and restart to manage it from this page instead.</p>
+  </div>
+  {{else}}
+  <p class="hint">Turn OIDC on, off, or point it at a different provider &mdash; takes effect immediately, no
+    restart needed. Leave the client secret blank when saving to keep whatever is already stored; uncheck
+    "enabled" to turn OIDC off (a recovery code becomes the only way to sign in).</p>
+  <div class="card">
+    <form class="grid" method="post" action="/authentication">
+      <label class="check wide"><input type="checkbox" name="oidc_enabled" {{if .Form.Get "oidc_enabled"}}checked{{end}}> Enabled</label>
+      <label class="wide">Issuer URL <input name="oidc_issuer" value="{{.Form.Get "oidc_issuer"}}" placeholder="https://auth.example.com"></label>
+      <label>Client ID <input name="oidc_client_id" value="{{.Form.Get "oidc_client_id"}}"></label>
+      <label>Client secret {{if .Config.Enabled}}<span class="muted">(configured; leave blank to keep it)</span>{{end}}
+        <input name="oidc_client_secret" type="password" autocomplete="off"></label>
+      <label class="wide">Redirect URL, exactly as registered with the provider
+        <input name="oidc_redirect_url" value="{{.Form.Get "oidc_redirect_url"}}" placeholder="https://backup.example.com/auth/callback"></label>
+      <label class="wide">Allowed identities, comma-separated (empty allows anyone the provider authenticates)
+        <input name="oidc_allowed_emails" value="{{.Form.Get "oidc_allowed_emails"}}" placeholder="you@example.com"></label>
+      <div class="actions"><button type="submit">Save</button></div>
+    </form>
+  </div>
+  {{end}}
+
+  <h2>Recovery codes</h2>
+  <div class="card">
+    <p class="hint">Managed on the setup page, reachable now that you're signed in.</p>
+    <p><a href="/setup">Manage recovery codes</a></p>
+  </div>
+{{template "bottom" .}}{{end}}

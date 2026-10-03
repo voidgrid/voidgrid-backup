@@ -1,0 +1,61 @@
+{{define "vms"}}{{template "top" .}}
+  <h2>Virtual machines on {{.Agent.Name}}</h2>
+  <p class="hint">A running VM is switched onto temporary overlay files while its disks are read, so the disk images hold still,
+    then everything is merged back. With the QEMU guest agent installed and "freeze" ticked, guest filesystems are flushed and
+    frozen for the instant the overlay is created; otherwise the copy is crash-consistent (like pulling the power). A shut-off VM
+    is copied as is. Only writable file-backed disks can be backed up; CD-ROMs and block devices are listed but skipped.</p>
+  {{$agent := .Agent}}{{$repos := .Repos}}{{$keep := .Keep}}
+  {{if not .VMs}}{{if not .Error}}<div class="card"><div class="empty">No VMs found on this host.</div></div>{{end}}{{end}}
+  {{range .VMs}}
+  <h2>{{.VM.Name}} <span class="{{if eq .VM.State "running"}}ok{{else}}muted{{end}}">{{.VM.State}}</span></h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Disk</th><th>Device</th><th>Source</th><th>Format</th><th>Notes</th></tr></thead>
+      <tbody>
+      {{range .VM.Disks}}
+        <tr>
+          <td class="mono">{{.Target}}</td>
+          <td>{{.Device}}</td>
+          <td class="mono">{{.Source}}</td>
+          <td>{{.Format}}</td>
+          <td>{{if not .Backupable}}<span class="muted">skipped</span>{{end}}{{if .Backing}} <span class="warn">has a backing image: only the top layer is copied</span>{{end}}{{if .AgentReadOnly}} <span class="muted">read-only in the agent: restore it elsewhere</span>{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{if .Existing}}
+    <p class="hint">Already backed up by job <strong>{{.Existing}}</strong>.</p>
+  {{else if not $repos}}
+    <p class="hint">Add a repository first.</p>
+  {{else}}
+  <div class="card" style="margin-top:10px">
+    <form class="grid" method="post" action="/jobs/vm">
+      <input type="hidden" name="agent" value="{{$agent.ID}}">
+      <input type="hidden" name="vm" value="{{.VM.Name}}">
+      <label>Job name <input name="name" value="vm-{{.VM.Name}}" required></label>
+      <label>Repository <select name="repository">{{range $repos}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+      <fieldset>
+        <legend>Disks</legend>
+        {{range .VM.Disks}}{{if .Backupable}}
+          <label class="check wide"><input type="checkbox" name="disk" value="{{.Target}}" checked>
+            <span class="mono">{{.Target}}</span> <span class="muted mono">{{.Source}}</span></label>
+        {{end}}{{end}}
+      </fieldset>
+      <label class="check wide"><input type="checkbox" name="quiesce" checked> Freeze guest filesystems through the QEMU guest agent when it is available</label>
+      <label>Schedule <input name="schedule" class="mono" value="30 3 * * *"></label>
+      <div class="keep">
+        <label>Keep latest <input name="keep_latest" value="{{$keep.Latest}}"></label>
+        <label>Hourly <input name="keep_hourly" value="{{$keep.Hourly}}"></label>
+        <label>Daily <input name="keep_daily" value="{{$keep.Daily}}"></label>
+        <label>Weekly <input name="keep_weekly" value="{{$keep.Weekly}}"></label>
+        <label>Monthly <input name="keep_monthly" value="{{$keep.Monthly}}"></label>
+        <label>Annual <input name="keep_annual" value="{{$keep.Annual}}"></label>
+      </div>
+      <label class="check wide"><input type="checkbox" name="enabled" checked> Schedule enabled</label>
+      <div class="actions"><button type="submit">Create VM job</button></div>
+    </form>
+  </div>
+  {{end}}
+  {{end}}
+{{template "bottom" .}}{{end}}

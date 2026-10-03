@@ -1,0 +1,99 @@
+{{define "job"}}{{template "top" .}}
+  {{$job := .Job}}
+  <div class="row" id="job-head">
+    <h2 style="margin:0">{{$job.Name}}</h2>
+    {{if $job.Running}}<span class="running">running</span>{{end}}
+    <form method="post" action="/jobs/{{$job.ID}}/run"><button type="submit" {{if $job.Running}}disabled{{end}}>Back up now</button></form>
+    <form method="post" action="/jobs/{{$job.ID}}/check"><button class="plain" type="submit" {{if $job.Running}}disabled{{end}}>Verify repository</button></form>
+    {{if not $job.Running}}<a href="/jobs/{{$job.ID}}/edit"><button class="plain" type="button">Edit</button></a>{{end}}
+    <form method="post" action="/jobs/{{$job.ID}}/toggle"><button class="plain" type="submit">{{if $job.Enabled}}Disable schedule{{else}}Enable schedule{{end}}</button></form>
+  </div>
+
+  <h2>Details</h2>
+  <div class="card">
+    <dl>
+      <dt>Agent</dt><dd>{{$job.Agent}}</dd>
+      <dt>Repository</dt><dd>{{$job.Repo}}</dd>
+      {{with $job.Stack}}
+      <dt>Compose project</dt><dd class="mono">{{.Project}} in {{.WorkingDir}}</dd>
+      <dt>Mounts included</dt><dd class="mono wrap">{{if .Include}}{{join .Include "\n"}}{{else}}-{{end}}</dd>
+      <dt>Mounts left out</dt><dd class="mono wrap">{{if .Exclude}}{{join .Exclude "\n"}}{{else}}-{{end}}</dd>
+      <dt>Database dumps</dt><dd>{{range $svc, $kind := .Dumps}}{{$svc}} ({{$kind}}) {{else}}-{{end}}</dd>
+      <dt>While reading files</dt><dd>{{.Quiesce}}</dd>
+      {{else}}{{with $job.VM}}
+      <dt>VM</dt><dd class="mono">{{.Name}}</dd>
+      <dt>Disks</dt><dd class="mono">{{if .Disks}}{{join .Disks ", "}}{{else}}all{{end}}</dd>
+      <dt>Guest agent freeze</dt><dd>{{if .Quiesce}}when available{{else}}no{{end}}</dd>
+      {{else}}
+      <dt>Paths</dt><dd class="mono wrap">{{join $job.Paths "\n"}}</dd>
+      {{end}}{{end}}
+      <dt>Excludes</dt><dd class="mono wrap">{{if $job.Excludes}}{{join $job.Excludes "\n"}}{{else}}-{{end}}</dd>
+      <dt>Schedule</dt><dd class="mono">{{if $job.Schedule}}{{$job.Schedule}}{{if not $job.Enabled}} (disabled){{end}}{{else}}manual{{end}}</dd>
+      <dt>Next backup</dt><dd>{{if $job.Next.IsZero}}-{{else}}{{when $job.Next}}{{end}}</dd>
+      <dt>Retention</dt><dd>latest {{$job.Keep.Latest}}, hourly {{$job.Keep.Hourly}}, daily {{$job.Keep.Daily}}, weekly {{$job.Keep.Weekly}}, monthly {{$job.Keep.Monthly}}, annual {{$job.Keep.Annual}}</dd>
+    </dl>
+  </div>
+
+  <div id="job-runs">
+  <h2>Runs</h2>
+  <div class="card">
+    {{if .Runs}}
+    <table>
+      <thead><tr><th>Started</th><th>Kind</th><th>Trigger</th><th>Status</th><th>Duration</th><th>Summary</th></tr></thead>
+      <tbody>
+      {{range .Runs}}
+        <tr>
+          <td>{{when .StartedAt}}</td>
+          <td>{{.Kind}}</td>
+          <td>{{.Trigger}}</td>
+          <td><span class="{{.Status}}">{{.Status}}</span></td>
+          <td>{{if .FinishedAt.IsZero}}-{{else}}{{.FinishedAt.Sub .StartedAt}}{{end}}</td>
+          <td class="wrap">{{.Summary}}</td>
+        </tr>
+        {{if .Error}}<tr><td></td><td colspan="5" class="err">{{.Error}}</td></tr>{{end}}
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No runs yet.</div>{{end}}
+  </div>
+  </div>
+
+  <div id="job-snaps">
+  <div class="row">
+    <h2 style="margin:28px 0 10px">Snapshots</h2>
+    <form method="post" action="/jobs/{{$job.ID}}/snapshots/refresh"><button class="plain" type="submit" {{if .SnapBusy}}disabled{{end}}>Refresh from repository</button></form>
+    <span class="muted">{{if .SnapSynced}}checked against the repository {{when .SnapAsOf}}{{else}}not checked against the repository yet{{end}}{{if .SnapBusy}} · refreshing…{{end}}</span>
+  </div>
+  <div class="card">
+    {{if .SnapError}}<div class="empty err">Could not list snapshots: {{.SnapError}}</div>
+    {{else if .Snapshots}}
+    <table>
+      <thead><tr><th>Taken</th><th>Path</th><th>Files</th><th>Size</th><th>Errors</th><th>ID</th></tr></thead>
+      <tbody>
+      {{range .Snapshots}}
+        <tr>
+          <td><a href="/jobs/{{$job.ID}}/snapshots/{{.ID}}">{{when .Start}}</a></td>
+          <td class="mono">{{.Path}}</td>
+          <td class="num">{{.Files}}</td>
+          <td class="num">{{bytes .Bytes}}</td>
+          <td class="num">{{if .Errors}}<span class="bad">{{.Errors}}</span>{{else}}0{{end}}{{if .Incomplete}} <span class="warn">incomplete: {{.Incomplete}}</span>{{end}}</td>
+          <td class="mono">{{short .ID}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else if .SnapBusy}}<div class="empty">Loading the snapshot list from the repository.</div>
+    {{else}}<div class="empty">No snapshots yet.</div>{{end}}
+  </div>
+  </div>
+
+  <h2>Delete job</h2>
+  <div class="card">
+    <form class="grid" method="post" action="/jobs/{{$job.ID}}/delete">
+      <label>Type <span class="mono">{{$job.Name}}</span> to confirm <input name="confirm" autocomplete="off"></label>
+      <div class="actions"><button class="danger" type="submit">Delete job and its run history</button>
+        <span class="hint">Snapshots stay in the repository.</span></div>
+    </form>
+  </div>
+  {{if or $job.Running .SnapBusy}}<div id="live" data-ids="job-head,job-runs,job-snaps" data-every="3000" hidden></div>{{end}}
+{{template "bottom" .}}{{end}}

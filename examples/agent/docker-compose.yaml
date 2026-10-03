@@ -1,0 +1,52 @@
+# voidgrid-backup-agent example. See docs/agent.md.
+#
+# The agent runs as root inside its container with every capability dropped
+# except the five it needs to read other containers' data and restore it
+# with the original ownership. The Docker socket already makes it
+# root-equivalent; dropping the rest removes what it never uses.
+services:
+  agent:
+    image: ${VB_IMAGE}
+    container_name: voidgrid-backup-agent
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/voidgrid-backup-agent"]
+    user: "0:0"
+    env_file: .env
+    environment:
+      VB_LISTEN: ":9443"
+      VB_HEALTH_LISTEN: "127.0.0.1:9444"
+      VB_DATA: /data
+      VB_DOCKER_SOCKET: /var/run/docker.sock
+      VB_LIBVIRT_SOCKET: /var/run/libvirt/libvirt-sock
+      VB_LIBVIRT_URI: qemu:///system
+    ports:
+      - "${VB_PORT}:9443"
+    cap_drop: [ALL]
+    cap_add:
+      - DAC_READ_SEARCH  # read files it doesn't own
+      - DAC_OVERRIDE     # write restores into directories it doesn't own
+      - CHOWN            # restore ownership
+      - FOWNER           # restore modes/times on files it doesn't own
+      - FSETID           # keep setuid/setgid bits
+    security_opt:
+      - no-new-privileges:true
+      - label=disable    # SELinux hosts: read other containers' mounts without relabelling them
+    volumes:
+      # Agent identity (key, certificates) and Kopia cache. Keep it: losing it
+      # means re-enrolling the agent.
+      - ./data:/data
+      - ${DOCKER_SOCKET}:/var/run/docker.sock
+      - ${LIBVIRT_SOCKET}:/var/run/libvirt/libvirt-sock
+      # Backup sources: same path as on the host, read-only.
+      - ${STACKS_DIR}:${STACKS_DIR}:ro
+      - ${DATA_DIR}:${DATA_DIR}:ro
+      - ${VM_IMAGES_DIR}:${VM_IMAGES_DIR}:ro
+      # Where restores to a directory land.
+      - ${RESTORE_DIR}:${RESTORE_DIR}
+      - ${SFTP_KEY}:/keys/sftp_key:ro
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/voidgrid-backup-agent", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

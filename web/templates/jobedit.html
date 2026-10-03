@@ -1,0 +1,80 @@
+{{define "jobedit"}}{{template "top" .}}
+  {{$job := .Job}}
+  <h2>Edit {{$job.Name}}</h2>
+  <p class="hint">Changes apply from the next backup. Existing snapshots are untouched, and the next run only uploads what is new or changed. The agent, repository{{if $job.Stack}}, compose project{{end}}{{if $job.VM}} and VM{{end}} are fixed; create a new job to change them.</p>
+  <div class="card">
+    <form class="grid" method="post" action="/jobs/{{$job.ID}}/edit">
+      <label>Job name <input name="name" value="{{$job.Name}}" required></label>
+      <label>Schedule <input name="schedule" class="mono" value="{{$job.Schedule}}" placeholder="0 3 * * *"></label>
+
+      {{with $job.Stack}}
+      <div class="wide muted">Compose project <span class="mono">{{.Project}}</span> in <span class="mono">{{.WorkingDir}}</span></div>
+      {{if $.Mounts}}
+      <fieldset>
+        <legend>Mounts to back up</legend>
+        <p class="hint wide">Ticked mounts are backed up; unticked ones are left out. A mount inside the compose directory is already part of the stack directory, so it is backed up with it, and unticking it leaves it out. Database data directories and system paths start unticked: the dump is the consistent copy of a database, and system files belong to the host.</p>
+        <table class="sizes">
+          <thead><tr><th class="tick"></th><th>Mount</th><th class="col-by">Used by</th><th class="num col-size">Size</th><th class="num col-files">Files</th></tr></thead>
+          <tbody>
+          {{range $.Mounts}}
+            <tr {{if not .Missing}}data-usage data-agent="{{$job.AgentID}}" data-path="{{.Source}}"{{end}}>
+              <td class="tick"><input type="hidden" name="mount" value="{{.Source}}"><input type="checkbox" name="include" value="{{.Source}}" {{if .Checked}}checked{{end}}></td>
+              <td class="mono">{{.Source}}{{if .Missing}}<span class="note warn">not found on the agent right now</span>{{end}}{{if .Inside}}<span class="note muted">inside the compose directory</span>{{end}}{{if .ReadOnly}}<span class="note muted">read-only in the agent: restore it elsewhere</span>{{end}}</td>
+              <td class="muted">{{.Services}}</td>
+              <td class="num" data-size>{{if .Missing}}-{{end}}</td>
+              <td class="num" data-files>{{if .Missing}}-{{end}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </fieldset>
+      {{end}}
+      {{if $.Dumps}}
+      <fieldset>
+        <legend>Database dumps</legend>
+        {{range $.Dumps}}
+          <label>{{.Service}} {{if .Detected}}<span class="muted">detected {{.Detected}}</span>{{else}}<span class="warn">not found on the agent right now</span>{{end}}
+            <select name="dump:{{.Service}}">
+              {{$sel := .Selected}}
+              {{range $k := list "none" "postgres" "mariadb" "redis"}}<option value="{{$k}}" {{if eq $k $sel}}selected{{end}}>{{$k}}</option>{{end}}
+            </select></label>
+        {{end}}
+      </fieldset>
+      {{end}}
+      <label>While reading files
+        <select name="quiesce">
+          {{$q := .Quiesce}}
+          <option value="none" {{if eq $q "none"}}selected{{end}}>leave containers running</option>
+          <option value="pause" {{if eq $q "pause"}}selected{{end}}>pause them (recommended with SQLite)</option>
+          <option value="stop" {{if eq $q "stop"}}selected{{end}}>stop them</option>
+        </select></label>
+      {{else}}{{with $job.VM}}
+      <div class="wide muted">VM <span class="mono">{{.Name}}</span></div>
+      <fieldset>
+        <legend>Disks</legend>
+        {{range $.Disks}}
+          <label class="check wide"><input type="checkbox" name="disk" value="{{.Target}}" {{if .Checked}}checked{{end}}>
+            <span class="mono">{{.Target}}</span> {{if .Source}}<span class="muted mono">{{.Source}}</span>{{end}}
+            {{if .Missing}}<span class="warn">not found on the agent right now</span>{{end}}</label>
+        {{end}}
+      </fieldset>
+      <label class="check wide"><input type="checkbox" name="quiesce" {{if .Quiesce}}checked{{end}}> Freeze guest filesystems through the QEMU guest agent when it is available</label>
+      {{else}}
+      <label class="wide">Paths, one per line <textarea name="paths" required>{{join $job.Paths "\n"}}</textarea></label>
+      {{end}}{{end}}
+
+      <label class="wide">Excludes, one per line <textarea name="excludes">{{join $job.Excludes "\n"}}</textarea></label>
+      <div class="keep">
+        <label>Keep latest <input name="keep_latest" value="{{$job.Keep.Latest}}"></label>
+        <label>Hourly <input name="keep_hourly" value="{{$job.Keep.Hourly}}"></label>
+        <label>Daily <input name="keep_daily" value="{{$job.Keep.Daily}}"></label>
+        <label>Weekly <input name="keep_weekly" value="{{$job.Keep.Weekly}}"></label>
+        <label>Monthly <input name="keep_monthly" value="{{$job.Keep.Monthly}}"></label>
+        <label>Annual <input name="keep_annual" value="{{$job.Keep.Annual}}"></label>
+      </div>
+      <p class="hint wide">Lowering a retention count deletes the older snapshots it no longer keeps, at the next backup. That can't be undone.</p>
+      <label class="check wide"><input type="checkbox" name="enabled" {{if $job.Enabled}}checked{{end}}> Schedule enabled</label>
+      <div class="actions"><button type="submit">Save</button> <a href="/jobs/{{$job.ID}}">Cancel</a></div>
+    </form>
+  </div>
+{{template "bottom" .}}{{end}}

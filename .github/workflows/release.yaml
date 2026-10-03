@@ -1,0 +1,55 @@
+name: release
+
+# Builds the image and pushes it to ghcr.io when a version tag is pushed.
+# The Dockerfile runs `go vet` and `go test`, so a failing test fails the build.
+#
+#   v0.9.0-beta.1  ->  :v0.9.0-beta.1 and :beta         (a hyphen marks a pre-release)
+#   v0.9.0         ->  :v0.9.0, :latest and :beta
+#
+# :latest only ever moves on a stable release. :beta follows every tag, so it
+# never falls behind stable. Versioned tags are never moved.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Choose tags
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          case "${TAG}" in
+            *-*) aliases="beta" ;;
+            *)   aliases="latest beta" ;;
+          esac
+          echo "ALIASES=${aliases}" >> "${GITHUB_ENV}"
+
+      - name: Build
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          args=(-t "${image}:${TAG}")
+          for a in ${ALIASES}; do args+=(-t "${image}:${a}"); done
+          docker build \
+            --build-arg "VERSION=${TAG}" \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.version=${TAG}" \
+            "${args[@]}" .
+
+      - name: Push
+        env:
+          TAG: ${{ github.ref_name }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "${TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          for t in "${TAG}" ${ALIASES}; do docker push "${image}:${t}"; done

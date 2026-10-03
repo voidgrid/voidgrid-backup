@@ -1,0 +1,60 @@
+{{define "jobs"}}{{template "top" .}}
+  <h2>Jobs</h2>
+  <div id="jobs-table">
+  <div class="card">
+    {{if .Jobs}}
+    <table>
+      <thead><tr><th>Name</th><th>Agent</th><th>Repository</th><th>Paths</th><th>Schedule</th><th>Last backup</th><th>Next</th></tr></thead>
+      <tbody>
+      {{range .Jobs}}
+        <tr>
+          <td><a href="/jobs/{{.ID}}">{{.Name}}</a></td>
+          <td>{{.Agent}}</td>
+          <td>{{.Repo}}</td>
+          <td class="mono">{{if .Stack}}stack {{.Stack.Project}}{{else if .VM}}VM {{.VM.Name}}{{else}}{{join .Paths ", "}}{{end}}</td>
+          <td class="mono">{{if .Schedule}}{{.Schedule}}{{if not .Enabled}} <span class="muted">(off)</span>{{end}}{{else}}<span class="muted">manual</span>{{end}}</td>
+          <td>{{if .Running}}<span class="running">running</span>{{else if .Last}}<span class="{{.Last.Status}}">{{.Last.Status}}</span> {{ago .Last.StartedAt}}{{else}}<span class="muted">never</span>{{end}}</td>
+          <td>{{if .Next.IsZero}}-{{else}}{{when .Next}}{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No jobs yet.</div>{{end}}
+  </div>
+  </div>
+  {{if .Jobs}}<div id="live" data-ids="jobs-table" data-every="10000" hidden></div>{{end}}
+
+  <p class="hint">To back up a Docker compose stack or a libvirt VM, open <a href="/">Agents</a> and pick "stacks" or "VMs" on the host that runs it.</p>
+  <h2>Add a path job</h2>
+  {{if or (not .Agents) (not .Repos)}}<div class="card"><div class="empty">Enroll an agent and add a repository first.</div></div>{{else}}
+  <p class="hint">Paths are absolute paths as the agent sees them. / and /proc, /sys, /dev, /run are refused. The schedule is a standard 5-field cron expression in the server's time zone; leave it blank for manual runs only.</p>
+  <div class="card">
+    <form class="grid" method="post" action="/jobs">
+      <label>Name <input name="name" value="{{.Form.Get "name"}}" required></label>
+      <label>Schedule <input name="schedule" class="mono" value="{{.Form.Get "schedule"}}" placeholder="0 3 * * *"></label>
+      <label>Agent
+        <select name="agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+      </label>
+      <label>Repository
+        <select name="repository">{{$sel := .Form.Get "repository"}}{{range .Repos}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+      </label>
+      <label class="wide">Paths, one per line <textarea name="paths" required>{{.Form.Get "paths"}}</textarea></label>
+      <div class="wide">
+        <button type="button" class="plain" id="check-sizes">Check sizes</button>
+        <div id="path-sizes" class="muted"></div>
+      </div>
+      <label class="wide">Excludes, one per line (gitignore-style, e.g. <span class="mono">*.tmp</span> or <span class="mono">/cache/</span>) <textarea name="excludes">{{.Form.Get "excludes"}}</textarea></label>
+      <div class="keep">
+        <label>Keep latest <input name="keep_latest" value="{{.Form.Get "keep_latest"}}"></label>
+        <label>Hourly <input name="keep_hourly" value="{{.Form.Get "keep_hourly"}}"></label>
+        <label>Daily <input name="keep_daily" value="{{.Form.Get "keep_daily"}}"></label>
+        <label>Weekly <input name="keep_weekly" value="{{.Form.Get "keep_weekly"}}"></label>
+        <label>Monthly <input name="keep_monthly" value="{{.Form.Get "keep_monthly"}}"></label>
+        <label>Annual <input name="keep_annual" value="{{.Form.Get "keep_annual"}}"></label>
+      </div>
+      <label class="check wide"><input type="checkbox" name="enabled" {{if .Form.Get "enabled"}}checked{{end}}> Schedule enabled</label>
+      <div class="actions"><button type="submit">Create job</button></div>
+    </form>
+  </div>
+  {{end}}
+{{template "bottom" .}}{{end}}

@@ -1,0 +1,10 @@
+{{define "recovery-login"}}{{template "top" .}}
+  <h2>Sign in with a recovery code</h2>
+  <div class="card">
+    <form class="grid" method="post" action="/auth/recovery">
+      <label class="wide">Recovery code <input name="code" autocomplete="off" autofocus></label>
+      <div class="actions"><button type="submit">Sign in</button></div>
+    </form>
+  </div>
+  <p class="hint"><a href="/auth/login">Back to sign in</a></p>
+{{template "bottom" .}}{{end}}

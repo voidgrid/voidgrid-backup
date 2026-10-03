@@ -1,0 +1,79 @@
+{{define "browse"}}{{template "top" .}}
+  {{$base := printf "/jobs/%s/snapshots/%s" .Job.ID .SnapshotID}}
+  <h2><a href="/jobs/{{.Job.ID}}">{{.Job.Name}}</a> · snapshot <span class="mono">{{short .SnapshotID}}</span></h2>
+  <p class="mono">
+    <a href="{{$base}}">root</a>{{range .Crumbs}} / <a href="{{$base}}?path={{q .Path}}">{{.Name}}</a>{{end}}
+  </p>
+  <div class="card">
+    {{if .Entries}}
+    <table>
+      <thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead>
+      <tbody>
+      {{$path := .Path}}
+      {{range .Entries}}
+        <tr>
+          <td class="mono">{{if .Dir}}<a href="{{$base}}?path={{q (child $path .Name)}}">{{.Name}}/</a>{{else}}{{.Name}}{{end}}</td>
+          <td class="num">{{if .Dir}}-{{else}}{{bytes .Size}}{{end}}</td>
+          <td>{{when (unixTime .ModUnix)}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else if not .Error}}<div class="empty">Empty directory.</div>{{end}}
+  </div>
+
+  {{if and .Job.Stack (not .Path)}}
+  <h2>Restore the whole stack</h2>
+  <p class="hint">Leave the target empty to put everything back where it came from: the compose directory
+    <span class="mono">{{.Job.Stack.WorkingDir}}</span>, each mount at its original path, and the dumps into
+    <span class="mono">.voidgrid-backup-dumps/</span> in the compose directory. Existing files there are overwritten.
+    With a target, the snapshot is written under that empty directory instead and no containers are touched.</p>
+  <div class="card">
+    <form class="grid" method="post" action="{{$base}}/restore-stack">
+      <label class="wide">Target directory (blank = original locations) <input name="target_root" class="mono"></label>
+      <label class="check wide"><input type="checkbox" name="stop" checked> Stop the stack's containers during an in-place restore, then start them again</label>
+      <label>For an in-place restore, type <span class="mono">{{.Job.Stack.Project}}</span> to confirm <input name="confirm" autocomplete="off"></label>
+      <div class="actions"><button class="danger" type="submit">Restore stack</button></div>
+    </form>
+  </div>
+  {{if .Dumps}}
+  <h2>Import a database dump</h2>
+  <p class="hint">Loads the dump from this snapshot into the service's running container. PostgreSQL and MariaDB only;
+    Redis/Valkey dumps have to replace the data file with the server stopped.</p>
+  <div class="card">
+    <table><tbody>
+    {{range .Dumps}}
+      <tr><td class="mono">{{.}}</td>
+        <td><form method="post" action="{{$base}}/import"><input type="hidden" name="service" value="{{.}}">
+          <button class="plain" type="submit">Import into running {{.}}</button></form></td></tr>
+    {{end}}
+    </tbody></table>
+  </div>
+  {{end}}
+  {{end}}
+
+  {{if and .Job.VM (not .Path)}}
+  <h2>Restore the VM</h2>
+  <p class="hint">Leave the target empty to write the disks back over their original image files; the VM must be shut off
+    (or no longer exist). With a target, the disks and <span class="mono">domain.xml</span> are written into that empty directory instead.</p>
+  <div class="card">
+    <form class="grid" method="post" action="{{$base}}/restore-vm">
+      <label class="wide">Target directory (blank = original disk paths) <input name="target_dir" class="mono"></label>
+      <label class="check wide"><input type="checkbox" name="define" checked> If the VM no longer exists, define it again from the saved domain.xml</label>
+      <label>For an in-place restore, type <span class="mono">{{.Job.VM.Name}}</span> to confirm <input name="confirm" autocomplete="off"></label>
+      <div class="actions"><button class="danger" type="submit">Restore VM</button></div>
+    </form>
+  </div>
+  {{end}}
+
+  <h2>Restore {{if .Path}}<span class="mono">/{{.Path}}</span>{{else}}this snapshot{{end}} as files</h2>
+  <p class="hint">Restores onto the job's agent host. Without overwrite the target must be empty or not exist yet.</p>
+  <div class="card">
+    <form class="grid" method="post" action="{{$base}}/restore">
+      <input type="hidden" name="path" value="{{.Path}}">
+      <label class="wide">Target directory on the agent <input name="target" class="mono" value="{{.Target}}" required></label>
+      <label class="check wide"><input type="checkbox" name="overwrite"> Overwrite existing files in the target</label>
+      <div class="actions"><button type="submit">Restore</button></div>
+    </form>
+  </div>
+{{template "bottom" .}}{{end}}
