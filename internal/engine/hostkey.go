@@ -24,7 +24,9 @@ func FetchHostKey(ctx context.Context, host string, port int) (string, error) {
 		return "", fmt.Errorf("fetch host key: %w", err)
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(15 * time.Second))
+	if err := conn.SetDeadline(time.Now().Add(15 * time.Second)); err != nil {
+		return "", fmt.Errorf("fetch host key: %w", err)
+	}
 
 	var key ssh.PublicKey
 	_, _, _, err = ssh.NewClientConn(conn, addr, &ssh.ClientConfig{

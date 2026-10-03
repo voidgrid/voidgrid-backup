@@ -103,7 +103,7 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 	if err != nil {
 		return fmt.Errorf("docker %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response body; nothing to lose on close
 	if resp.StatusCode == http.StatusNotModified {
 		return nil // already paused/stopped/started
 	}
@@ -144,9 +144,9 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd, env []string
 
 	if stdin != nil {
 		go func() {
-			io.Copy(conn, stdin)
+			io.Copy(conn, stdin) //nolint:errcheck // a failed copy surfaces as the exec's own error on the read side
 			if cw, ok := conn.(interface{ CloseWrite() error }); ok {
-				cw.CloseWrite()
+				cw.CloseWrite() //nolint:errcheck // half-close after stdin; the exec's result reports failures
 			}
 		}()
 	}

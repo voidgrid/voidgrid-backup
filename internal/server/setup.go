@@ -54,7 +54,7 @@ func (c *Controller) SetOIDCConfig(ctx context.Context, cfg webauth.Config) erro
 	if err != nil {
 		return err
 	}
-	b, err := json.Marshal(cfg)
+	b, err := json.Marshal(cfg) //nolint:gosec // G117: stored in the catalog by design, like repository passwords; never sent back to the browser
 	if err != nil {
 		return err
 	}

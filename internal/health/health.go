@@ -37,7 +37,7 @@ func Probe(url string) {
 		fmt.Fprintln(os.Stderr, "unhealthy:", err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response body; nothing to lose on close
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	fmt.Println(strings.TrimSpace(string(body)))
 	if resp.StatusCode != http.StatusOK {

@@ -73,6 +73,7 @@ Both containers have health checks (`voidgrid-backup-server healthcheck`, `voidg
 No local Go toolchain is needed: everything runs in containers.
 
 - `scripts/go.sh test ./...`: build, vet and test (`scripts/go.sh` wraps the Go toolchain).
+- `scripts/lint.sh`: golangci-lint (pinned version, config in `.golangci.yml`). The release workflow runs it before building, so any finding blocks a release: fix it, or annotate it in place with `//nolint:<linter> // reason`.
 - `scripts/gen-proto.sh`: regenerate the gRPC code after editing `internal/proto/agent.proto`.
 - `scripts/docker-live-test.sh`: live tests against the local Docker daemon and
   real PostgreSQL, MariaDB and Valkey images (throwaway containers).

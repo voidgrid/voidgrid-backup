@@ -50,7 +50,7 @@ func NewHandler(c *Controller) http.Handler {
 			http.Error(w, "catalog: "+err.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		fmt.Fprintln(w, "ok")
+		fmt.Fprintln(w, "ok") //nolint:errcheck // status already sent; a failed write means the client went away
 	})
 	mux.HandleFunc("GET /{$}", u.agents)
 	mux.HandleFunc("POST /agents/registrations/{id}/approve", u.approveRegistration)
@@ -149,7 +149,7 @@ func redirectNotice(w http.ResponseWriter, r *http.Request, to, notice string) {
 	if notice != "" {
 		to += "?notice=" + url.QueryEscape(notice)
 	}
-	http.Redirect(w, r, to, http.StatusSeeOther)
+	http.Redirect(w, r, to, http.StatusSeeOther) //nolint:gosec // G710: callers pass local paths only
 }
 
 // Agents
@@ -691,11 +691,11 @@ func (u *ui) restore(w http.ResponseWriter, r *http.Request) {
 	target, overwrite := strings.TrimSpace(r.FormValue("target")), r.FormValue("overwrite") != ""
 	back := "/jobs/" + id + "/snapshots/" + sid + "?path=" + url.QueryEscape(rel)
 	if _, err := guard.RestoreTarget(target); err != nil {
-		http.Redirect(w, r, back+"&notice="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back+"&notice="+url.QueryEscape(err.Error()), http.StatusSeeOther) //nolint:gosec // G710: local path built from route segments
 		return
 	}
 	if u.c.IsRunning(id) {
-		http.Redirect(w, r, back+"&notice="+url.QueryEscape(ErrRunning.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back+"&notice="+url.QueryEscape(ErrRunning.Error()), http.StatusSeeOther) //nolint:gosec // G710: local path built from route segments
 		return
 	}
 	go func() {
@@ -756,7 +756,7 @@ func writeJSON[T any](w http.ResponseWriter, v []T, err error) {
 		v = []T{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	json.NewEncoder(w).Encode(v) //nolint:errcheck // status already sent; a failed write means the client went away
 }
 
 func whenStr(t time.Time) string {

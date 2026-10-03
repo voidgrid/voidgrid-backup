@@ -221,7 +221,7 @@ func openRepo(c repoFlags) (*engine.Engine, engine.Repo, func(), error) {
 		if err != nil {
 			return nil, engine.Repo{}, noop, err
 		}
-		cleanup = func() { os.RemoveAll(dir) }
+		cleanup = func() { os.RemoveAll(dir) } //nolint:errcheck // best-effort cleanup of a temporary directory
 	}
 	e, err := engine.New(dir, "recovery")
 	if err != nil {

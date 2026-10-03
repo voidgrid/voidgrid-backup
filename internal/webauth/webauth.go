@@ -325,14 +325,14 @@ func secure(r *http.Request) bool {
 }
 
 func (a *Authenticator) setCookie(w http.ResponseWriter, r *http.Request, name, value string, maxAge time.Duration) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: HttpOnly and SameSite always; Secure whenever the request came over HTTPS
 		Name: name, Value: value, Path: "/", HttpOnly: true, Secure: secure(r),
 		SameSite: http.SameSiteLaxMode, MaxAge: int(maxAge.Seconds()),
 	})
 }
 
 func (a *Authenticator) clearCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1}) //nolint:gosec // G124: deletes the cookie (MaxAge -1); its attributes don't matter
 }
 
 // --- signed tokens (session cookie payload) ---

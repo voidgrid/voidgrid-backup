@@ -96,7 +96,7 @@ func (a *Agent) registerOnce(ctx context.Context, cfg RegisterConfig, tok enroll
 	conn, err := grpc.NewClient(cfg.Server, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
 		MinVersion:         tls.VersionTLS13,
 		Certificates:       []tls.Certificate{a.bootstrap},
-		InsecureSkipVerify: true, // the pin below replaces chain verification
+		InsecureSkipVerify: true, //nolint:gosec // the token pin in VerifyConnection replaces CA verification; the pin below replaces chain verification
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			if len(cs.PeerCertificates) == 0 || !tok.Matches(cs.PeerCertificates[0].Raw) {
 				return errors.New("the server's certificate does not match the token (wrong server, or a token from another install)")

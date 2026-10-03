@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
@@ -104,7 +105,9 @@ func (u *ui) logs(w http.ResponseWriter, r *http.Request) {
 		levelName = "info"
 	}
 	limit := defaultLogLines
-	fmt.Sscanf(q.Get("limit"), "%d", &limit)
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil {
+		limit = n
+	}
 	if limit < 1 || limit > maxLogLines {
 		limit = defaultLogLines
 	}

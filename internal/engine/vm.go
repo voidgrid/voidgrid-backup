@@ -300,7 +300,7 @@ func readEntry(ctx context.Context, ent kfs.Entry, limit int64) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rd.Close()
+	defer rd.Close() //nolint:errcheck // reader; nothing to lose on close
 	return io.ReadAll(io.LimitReader(rd, limit))
 }
 

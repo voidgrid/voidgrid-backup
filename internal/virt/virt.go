@@ -118,14 +118,14 @@ func ParseDisks(domainXML string) ([]Disk, error) {
 func SnapshotXML(name string, all []Disk, overlays map[string]string) string {
 	var b strings.Builder
 	b.WriteString("<domainsnapshot><name>")
-	xml.EscapeText(&b, []byte(name))
+	xml.EscapeText(&b, []byte(name)) //nolint:errcheck // writes to a buffer, which never fails
 	b.WriteString("</name><description>voidgrid-backup</description><disks>")
 	for _, d := range all {
 		b.WriteString(`<disk name="`)
-		xml.EscapeText(&b, []byte(d.Target))
+		xml.EscapeText(&b, []byte(d.Target)) //nolint:errcheck // writes to a buffer, which never fails
 		if ov, ok := overlays[d.Target]; ok {
 			b.WriteString(`" snapshot="external"><driver type="qcow2"/><source file="`)
-			xml.EscapeText(&b, []byte(ov))
+			xml.EscapeText(&b, []byte(ov)) //nolint:errcheck // writes to a buffer, which never fails
 			b.WriteString(`"/></disk>`)
 		} else {
 			b.WriteString(`" snapshot="no"/>`)

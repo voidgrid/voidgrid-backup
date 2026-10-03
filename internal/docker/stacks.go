@@ -126,7 +126,7 @@ func DetectDump(image string) string {
 func findSQLite(root string, depth, limit int) []string {
 	var out []string
 	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error { //nolint:errcheck // the callback skips unreadable entries; a partial result is intended
 		if err != nil || len(out) >= limit {
 			return filepath.SkipDir
 		}
@@ -152,7 +152,7 @@ func isSQLite(p string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only file
 	hdr := make([]byte, 16)
 	n, _ := f.Read(hdr)
 	return n == 16 && string(hdr) == "SQLite format 3\x00"

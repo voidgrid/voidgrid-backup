@@ -399,12 +399,12 @@ func (e *Engine) ImportDump(ctx context.Context, r Repo, dk *docker.Client, snap
 	if err != nil {
 		return "", err
 	}
-	defer in.Close()
+	defer in.Close() //nolint:errcheck // reader; nothing to lose on close
 	rc, err := dk.Exec(ctx, svc.ContainerID, cmd, nil, in)
 	if err != nil {
 		return "", err
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck // reader; nothing to lose on close
 	var out tail
 	_, err = io.Copy(&out, rc)
 	return out.String(), err
@@ -424,7 +424,7 @@ func readStackManifest(ctx context.Context, root kfs.Entry) (StackManifest, erro
 	if err != nil {
 		return man, err
 	}
-	defer rd.Close()
+	defer rd.Close() //nolint:errcheck // reader; nothing to lose on close
 	if err := json.NewDecoder(io.LimitReader(rd, 1<<20)).Decode(&man); err != nil {
 		return man, fmt.Errorf("stack manifest: %w", err)
 	}

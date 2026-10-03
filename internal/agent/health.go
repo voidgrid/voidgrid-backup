@@ -32,7 +32,7 @@ func (a *Agent) HealthHandler(grpcAddr string) http.Handler {
 		if !st.Healthy {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
-		json.NewEncoder(w).Encode(st)
+		json.NewEncoder(w).Encode(st) //nolint:errcheck // status already sent; a failed write means the client went away
 	})
 	return mux
 }
@@ -48,8 +48,8 @@ func (a *Agent) Health(ctx context.Context, grpcAddr string) HealthStatus {
 	if f, err := os.CreateTemp(a.dir, ".health-*"); err != nil {
 		st.DataDir = err.Error()
 	} else {
-		f.Close()
-		os.Remove(f.Name())
+		f.Close()           //nolint:errcheck // writability probe; the file is deleted on the next line
+		os.Remove(f.Name()) //nolint:errcheck // best-effort cleanup of the probe file
 	}
 	if a.docker != nil {
 		st.Docker = "ok"

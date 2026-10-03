@@ -269,17 +269,17 @@ func WriteFileAtomic(path string, data []byte, mode fs.FileMode) error {
 		return err
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp) // no-op after a successful rename
+	defer os.Remove(tmp) //nolint:errcheck // no-op after a successful rename; best-effort cleanup otherwise
 	if err := f.Chmod(mode); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck // already returning the earlier error; the deferred Remove cleans up
 		return err
 	}
 	if _, err := f.Write(data); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck // already returning the earlier error; the deferred Remove cleans up
 		return err
 	}
 	if err := f.Sync(); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck // already returning the earlier error; the deferred Remove cleans up
 		return err
 	}
 	if err := f.Close(); err != nil {

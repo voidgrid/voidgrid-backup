@@ -22,6 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Same check as scripts/lint.sh locally: any finding fails the release
+      # before an image is built. Config: .golangci.yml.
+      - name: Lint
+        run: scripts/lint.sh
+
       - name: Choose tags
         env:
           TAG: ${{ github.ref_name }}

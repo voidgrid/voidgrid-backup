@@ -47,7 +47,7 @@ func Current() (Report, error) {
 	if err != nil {
 		return Report{UID: os.Geteuid()}, err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only file
 	r := Report{UID: os.Geteuid()}
 	found := false
 	sc := bufio.NewScanner(f)
