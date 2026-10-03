@@ -19,5 +19,5 @@ COPY --from=build /out/ /usr/local/bin/
 # relying on this base image's own default, so any uid works, root
 # included (the agent needs root, for the Docker/libvirt sockets).
 VOLUME /data
-EXPOSE 8080 9443
+EXPOSE 8080 9442 9443
 ENTRYPOINT ["/usr/local/bin/voidgrid-backup-server"]

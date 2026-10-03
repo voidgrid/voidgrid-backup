@@ -10,11 +10,13 @@ to the repository. The server only tells it what to do.
 cp examples/agent/.env.example examples/agent/.env   # then edit it
 cd examples/agent
 docker compose up -d
-docker compose logs agent | grep code   # the one-time enrollment code
 ```
 
-Enter the code on the server's Agents page with the address the server can
-reach this agent on (`host:VB_PORT`).
+Set `VB_SERVER` (the server's host and agent registration port) and
+`VB_TOKEN` (from the server's Agents page, or
+`docker exec voidgrid-backup-server /usr/local/bin/voidgrid-backup-server token`)
+in `.env` first. The agent then appears on the server's **Agents** page under
+"Waiting for approval"; approve it there and pick its name.
 
 ## Configuration
 
@@ -23,10 +25,11 @@ command line wins over the environment.
 
 | Flag | Variable | Default | Meaning |
 |---|---|---|---|
-| `-listen` | `VB_LISTEN` | `:9443` | gRPC address the server connects to |
+| `-server` | `VB_SERVER` | | `host:port` of the server's agent registration listener. Needed until the agent is approved. |
+| `-token` | `VB_TOKEN` | | Registration token from the server. Needed until the agent is approved. |
+| `-listen` | `VB_LISTEN` | `:9443` | gRPC address the server connects to. In the example compose `VB_PORT` sets this and the published port together. |
 | `-health-listen` | `VB_HEALTH_LISTEN` | `127.0.0.1:9444` | HTTP `/healthz`; keep it on loopback. Empty disables it. |
 | `-data` | `VB_DATA` | `/data` | Agent key, certificates and Kopia cache |
-| `-hostname` | `VB_HOSTNAME` | the container/host name | Name recorded on snapshots. **Set it and keep it stable**: snapshots are grouped by it and can only be browsed and restored by an agent with the same name. |
 | `-docker` | `VB_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker socket; empty disables stack backups |
 | `-libvirt-socket` | `VB_LIBVIRT_SOCKET` | `/var/run/libvirt/libvirt-sock` | libvirt socket; empty disables VM backups |
 | `-libvirt-uri` | `VB_LIBVIRT_URI` | `qemu:///system` | libvirt connection URI |
@@ -93,19 +96,28 @@ The compose health check runs the binary's own probe (the image has no curl):
 voidgrid-backup-agent healthcheck   # exit 0 healthy, 1 unhealthy
 ```
 
-## Enrollment
+## Registration
 
-On first start the agent creates a key, a self-signed bootstrap certificate
-and a one-time secret, and logs an enrollment code:
+On first start the agent creates a key and a self-signed certificate. It then
+connects to the server's registration listener (`VB_SERVER`), checks the
+server's certificate against the pin inside `VB_TOKEN` (no CA and no domain
+name are involved), and registers. A valid token only makes the agent appear
+under "Waiting for approval" on the Agents page; nothing is granted until you
+approve it. On approval the server issues a certificate for the agent's own
+key, which the agent installs without a restart. From then on the agent
+requires the server's client certificate for everything, and `VB_SERVER` and
+`VB_TOKEN` are no longer used.
 
-```
-hbe1-<secret>-<certificate pin>
-```
+The agent's identity is the ID the server assigns. It is the snapshot host name
+too, so renaming the agent in the UI is free: only the label changes. To bring
+a wiped or redeployed agent back as an existing one, choose it under
+"Replaces" when approving: it keeps that agent's ID, jobs and snapshots. The
+agent's key and certificate live in the data directory; deleting it makes the
+agent register as a new one.
 
-The server uses the pin to check it reached this agent and the secret to
-prove it was given the code. After enrollment the agent requires the server's
-client certificate for everything and the code stops working. The identity
-lives in the data directory; delete it to enroll the agent again.
+If the server rejects the agent, the agent logs it and keeps checking; use
+"Forget" on the server to let it register again. A wrong or rotated token
+is logged on every retry.
 
 ## Path backups
 
@@ -208,9 +220,11 @@ A **shut-off** VM is copied directly.
 
 | Symptom | Look at |
 |---|---|
-| No enrollment code in the log | The agent is already enrolled; delete its data directory to enroll it again |
+| The agent exits at start about `VB_SERVER`/`VB_TOKEN` | It is not approved yet and one of them is missing or malformed |
+| "does not match the token" in the log | `VB_SERVER` points at a different server than the token came from |
+| The agent never shows up under "Waiting for approval" | `VB_SERVER` and the registration port are reachable from this host, and the token is current (it changes when rotated) |
 | Stacks page: "no Docker socket configured" | The socket volume and `VB_DOCKER_SOCKET` |
 | VMs page: "no libvirt socket configured" | The socket volume and `VB_LIBVIRT_SOCKET` |
 | "is mounted read-only in the agent" on restore | Intended: restore to a directory, or mount that path read-write |
 | Partial backup: "could not read ..." | Capabilities and SELinux (see Permissions) |
-| Snapshots from before a rename can't be browsed | `VB_HOSTNAME` changed; set it back |
+| Snapshots missing after redeploying an agent | It registered as a new agent; approve it as replacing the old one to keep its ID |

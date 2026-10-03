@@ -26,7 +26,7 @@
 
   <p class="hint">To back up a Docker compose stack or a libvirt VM, open <a href="/">Agents</a> and pick "stacks" or "VMs" on the host that runs it.</p>
   <h2>Add a path job</h2>
-  {{if or (not .Agents) (not .Repos)}}<div class="card"><div class="empty">Enroll an agent and add a repository first.</div></div>{{else}}
+  {{if or (not .Agents) (not .Repos)}}<div class="card"><div class="empty">Register and approve an agent, then add a repository, first.</div></div>{{else}}
   <p class="hint">Paths are absolute paths as the agent sees them. / and /proc, /sys, /dev, /run are refused. The schedule is a standard 5-field cron expression in the server's time zone; leave it blank for manual runs only.</p>
   <div class="card">
     <form class="grid" method="post" action="/jobs">

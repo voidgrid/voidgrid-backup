@@ -20,19 +20,55 @@
       {{end}}
       </tbody>
     </table>
-    {{else}}<div class="empty">No agents enrolled yet.</div>{{end}}
+    {{else}}<div class="empty">No agents yet. Register one with the token below, then approve it here.</div>{{end}}
   </div>
   </div>
   {{if .Agents}}<div id="live" data-ids="agents-table" data-every="15000" hidden></div>{{end}}
 
-  <h2>Enroll an agent</h2>
-  <p class="hint">Start the agent, copy the enrollment code from its log, and enter it with the address the server can reach it on.</p>
+  {{if .Agents}}
+  <h2>Rename an agent</h2>
+  <p class="hint">The name is only a label. The agent keeps its ID, so its snapshots and jobs are unaffected.</p>
   <div class="card">
-    <form class="grid" method="post" action="/agents">
+    {{range .Agents}}
+    <form class="grid" method="post" action="/agents/{{.ID}}/rename">
       <label>Name <input name="name" value="{{.Name}}" required></label>
-      <label>Address <input name="address" value="{{.Address}}" placeholder="192.0.2.10:9443" required></label>
-      <label class="wide">Enrollment code <input name="code" class="mono" autocomplete="off" required></label>
-      <div class="actions"><button type="submit">Enroll</button></div>
+      <div class="actions"><button type="submit">Rename</button></div>
     </form>
+    {{end}}
+  </div>
+  {{end}}
+
+  <h2>Waiting for approval</h2>
+  {{if .Pending}}
+  <p class="hint">These agents presented a valid token. Nothing is granted until you approve one. To bring a wiped or redeployed agent back as an existing one, choose it under "Replaces": it keeps that agent's ID, jobs and snapshots.</p>
+  {{range .Pending}}
+  <div class="card">
+    <p>{{if .Hostname}}<span class="mono">{{.Hostname}}</span>{{else}}unnamed agent{{end}} · version <span class="mono">{{.Version}}</span> · registered {{ago .CreatedAt}} · key <span class="mono">{{printf "%.16s" .Fingerprint}}</span>
+      {{if eq .Status "rejected"}}· <span class="bad">rejected</span>{{end}}</p>
+    {{if eq .Status "rejected"}}
+    <form method="post" action="/agents/registrations/{{.ID}}/forget"><div class="actions"><button type="submit">Forget</button></div></form>
+    {{else}}
+    <form class="grid" method="post" action="/agents/registrations/{{.ID}}/approve">
+      <label>Name <input name="name" value="{{.Hostname}}"></label>
+      <label>Address <input name="address" class="mono" value="{{.Address}}" required></label>
+      <label>Replaces
+        <select name="replace">
+          <option value="">(new agent)</option>
+          {{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        </select>
+      </label>
+      <div class="actions"><button type="submit">Approve</button></div>
+    </form>
+    <form method="post" action="/agents/registrations/{{.ID}}/reject"><div class="actions"><button type="submit">Reject</button></div></form>
+    {{end}}
+  </div>
+  {{end}}
+  {{else}}<div class="card"><div class="empty">No agents are waiting.</div></div>{{end}}
+
+  <h2>Registration token</h2>
+  <p class="hint">Put this in each agent's configuration as <span class="mono">VB_TOKEN</span>, with <span class="mono">VB_SERVER</span> set to this server's host and registration port. It only lets an agent ask to be approved. Rotating it makes the old token stop working and drops agents that are waiting; agents already approved are not affected.</p>
+  <div class="card">
+    <p class="mono wrap">{{.Token}}</p>
+    <form method="post" action="/agents/token/rotate"><div class="actions"><button type="submit">Rotate token</button></div></form>
   </div>
 {{template "bottom" .}}{{end}}

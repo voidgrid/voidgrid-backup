@@ -24,7 +24,7 @@ func setupJob(t *testing.T) (*Controller, catalog.Job, string) {
 	ctx := context.Background()
 	a, addr := startAgent(t, t.TempDir())
 	c := newController(t)
-	ag, err := c.Enroll(ctx, "box", addr, a.EnrollmentCode())
+	ag, err := enrollTestAgent(t, c, a, "box", addr)
 	if err != nil {
 		t.Fatal(err)
 	}

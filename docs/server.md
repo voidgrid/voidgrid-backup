@@ -21,8 +21,8 @@ image doesn't care which uid it runs as, only that it can write `./data`.
 
 Open `http://<host>:<VB_PORT>/`. The first visit is always to `/setup` —
 see [Authentication](#authentication) below before you get there, it needs
-a token from the log. Then enroll an agent (see [agent.md](agent.md)), add
-a repository, and add jobs.
+a token from the log. Then register an agent (see [agent.md](agent.md)) and
+approve it on the Agents page, add a repository, and add jobs.
 
 ## Configuration
 
@@ -32,6 +32,7 @@ command line wins over the environment.
 | Flag | Variable | Default | Meaning |
 |---|---|---|---|
 | `-listen` | `VB_LISTEN` | `:8080` | HTTP address for the UI, API and `/healthz` |
+| `-agent-listen` | `VB_AGENT_LISTEN` | `:9442` | TLS address agents register on. In the example compose `VB_AGENT_PORT` sets this and the published port together. |
 | `-data` | `VB_DATA` | `/data` | Directory for `catalog.db`, `pki/` and `session.key` |
 | `-poll` | `VB_POLL` | `30s` | How often every agent is checked |
 | `-oidc-issuer` | `VB_OIDC_ISSUER` | (empty) | OIDC provider issuer URL. Empty means sign-in is by recovery code only — see [Authentication](#authentication) |
@@ -49,7 +50,8 @@ built into the binary, so `TZ` works in the minimal image.
 | Path | What it is | If you lose it |
 |---|---|---|
 | `catalog.db` | SQLite: agents, repositories (including their passwords), jobs, runs | You have to add repositories and jobs again. The backups themselves are safe in the repositories, if you still have their passwords. |
-| `pki/ca.crt`, `pki/ca.key` | The CA every agent trusts | Every agent has to be enrolled again |
+| `pki/ca.crt`, `pki/ca.key` | The CA every agent trusts | Every agent has to register again |
+| `pki/registry.crt`, `pki/registry.key` | Certificate of the agent registration listener; the registration token pins it | Recreated, which changes the token: update `VB_TOKEN` on agents that are not approved yet |
 | `pki/server.crt`, `pki/server.key` | The server's client certificate for talking to agents | Recreated from the CA |
 
 `catalog.db` holds repository passwords in plain text, so the directory is
@@ -70,11 +72,14 @@ It reads the same `VB_LISTEN` and probes `/healthz` on loopback.
 
 ## Network and security
 
-- The server connects **to** agents (default port 9443). Agents never connect
-  to the server, so the server must be able to reach every agent's address.
-- Agent traffic is mutual TLS with the server's own CA. An agent accepts
-  enrollment only with its one-time code and afterwards only the server's
-  client certificate.
+- Agents register with the server on its own TLS listener (`VB_AGENT_LISTEN`,
+  default `:9442`), separate from the web UI port, so the UI can stay behind a
+  reverse proxy. Its certificate is self-signed; the registration token pins it.
+  A valid token only creates a pending entry that you approve or reject.
+- After approval the server connects **to** the agent (default port 9443), so
+  the server must be able to reach each agent's address.
+- Agent traffic is mutual TLS with the server's own CA. An approved agent
+  accepts only the server's client certificate.
 - Cross-site form posts are refused (Go's `net/http.CrossOriginProtection`),
   so another site in your browser can't trigger actions here even while
   you're signed in.
@@ -178,10 +183,24 @@ than OIDC being temporarily unavailable.
 
 ### Agents
 
-Enroll an agent with its name, the address the server can reach it on
-(`host:port`), and the code from its log. The table shows reachability,
-version and last contact, plus any warnings the agent reports about itself
-(for example running without the permissions it needs).
+Agents register themselves (see [agent.md](agent.md#registration)) and wait
+under **Waiting for approval**. Approve one with a name and the address the
+server can reach it on (`host:port`, pre-filled from where it connected and
+the port it reported); the address is editable. Choosing an existing agent
+under **Replaces** makes the new registration take over that agent's ID, jobs
+and snapshots, which is how a wiped or redeployed host comes back. Reject
+refuses an agent; Forget removes a rejected entry so it can register again.
+Agents can be renamed at any time: the name is only a label.
+
+The **Registration token** is shown on the same page. It is one reusable
+secret for all new agents, rotatable with a button; rotating makes the old
+token stop working and drops agents that are still waiting, but agents that
+are already approved are unaffected. `voidgrid-backup-server token` prints it
+on the command line, for deploy scripts.
+
+The table shows reachability, version and last contact, plus any warnings the
+agent reports about itself (for example running without the permissions it
+needs).
 
 Each agent has two discovery pages:
 
@@ -298,7 +317,7 @@ know newer RPCs, which shows up as an error on the run.
 
 | Symptom | Look at |
 |---|---|
-| Agent "unreachable" | The error under it on the Agents page; can the server reach `host:port`? Was the agent's data directory lost (then enroll it again)? |
-| Enrollment fails with "does not match the enrollment code" | The address points at a different agent than the one whose code you entered |
+| Agent "unreachable" | The error under it on the Agents page; can the server reach `host:port`? Was the agent's data directory lost (then register it again, approving it as replacing this one)? |
+| An agent never appears under "Waiting for approval" | Its `VB_SERVER` reaches the registration port, and its `VB_TOKEN` is the current one (rotating changes it) |
 | Schedules run at the wrong hour | `TZ` in the server's `.env` |
 | A run is "partial" | The run's detail lines say exactly what and where |

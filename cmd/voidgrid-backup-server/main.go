@@ -4,10 +4,12 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +20,7 @@ import (
 	_ "time/tzdata" // TZ works in the distroless image, which has no zoneinfo
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/enroll"
 	"github.com/voidgrid/voidgrid-backup/internal/envflag"
 	"github.com/voidgrid/voidgrid-backup/internal/health"
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
@@ -29,6 +32,7 @@ import (
 
 func main() {
 	listen := envflag.String("listen", "VB_LISTEN", ":8080", "HTTP address for the UI, API and /healthz")
+	agentListen := envflag.String("agent-listen", "VB_AGENT_LISTEN", ":9442", "TLS address agents register on")
 	data := envflag.String("data", "VB_DATA", "/data", "directory for the catalog and the CA")
 	poll := envflag.Duration("poll", "VB_POLL", 30*time.Second, "how often to check agents")
 	oidcIssuer := envflag.String("oidc-issuer", "VB_OIDC_ISSUER", "", "OIDC provider issuer URL; empty disables login and leaves every route open")
@@ -39,10 +43,20 @@ func main() {
 
 	args := os.Args[1:]
 	healthcheck := len(args) > 0 && args[0] == "healthcheck"
-	if healthcheck {
+	printToken := len(args) > 0 && args[0] == "token"
+	if healthcheck || printToken {
 		args = args[1:]
 	}
 	flag.CommandLine.Parse(args)
+	if printToken {
+		tok, err := readToken(*data)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "token:", err)
+			os.Exit(1)
+		}
+		fmt.Println(tok)
+		return
+	}
 	if healthcheck {
 		url, err := health.LocalURL(*listen, "/healthz")
 		if err != nil {
@@ -59,7 +73,7 @@ func main() {
 	// stderr (docker logs) is unchanged.
 	logs := logbuf.New(2000)
 	slog.SetDefault(slog.New(logs.Handler(logbuf.NewStderrHandler(os.Stderr, slog.LevelInfo))))
-	if err := run(*listen, *data, *poll, oidcCfg, logs); err != nil {
+	if err := run(*listen, *agentListen, *data, *poll, oidcCfg, logs); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -75,7 +89,31 @@ func splitCommaList(s string) []string {
 	return out
 }
 
-func run(listen, data string, poll time.Duration, oidcCfg webauth.Config, logs *logbuf.Buffer) error {
+// readToken prints the registration token of the server whose data directory
+// is data, without starting it. It only reads: the running server creates the
+// secret and the certificate.
+func readToken(data string) (string, error) {
+	cat, err := catalog.Open(filepath.Join(data, "catalog.db"))
+	if err != nil {
+		return "", err
+	}
+	defer cat.Close()
+	hexSecret, err := cat.GetSetting(context.Background(), "registration_secret")
+	if err != nil {
+		return "", err
+	}
+	secret, err := hex.DecodeString(hexSecret)
+	if err != nil || len(secret) != enroll.SecretLen {
+		return "", errors.New("no registration token yet: start the server once first")
+	}
+	cert, err := pki.ReadCert(filepath.Join(data, "pki", "registry.crt"))
+	if err != nil {
+		return "", fmt.Errorf("registration certificate: %w (start the server once first)", err)
+	}
+	return enroll.Format(secret, cert.Raw), nil
+}
+
+func run(listen, agentListen, data string, poll time.Duration, oidcCfg webauth.Config, logs *logbuf.Buffer) error {
 	if err := os.MkdirAll(data, 0o700); err != nil {
 		return err
 	}
@@ -93,11 +131,15 @@ func run(listen, data string, poll time.Duration, oidcCfg webauth.Config, logs *
 	if err != nil {
 		return err
 	}
+	registryCert, err := pki.LoadOrCreateServerTLSCert(pkiDir)
+	if err != nil {
+		return err
+	}
 	key, err := webauth.LoadOrCreateSessionKey(data)
 	if err != nil {
 		return fmt.Errorf("session key: %w", err)
 	}
-	ctrl := &server.Controller{Catalog: cat, CA: ca, ClientCert: clientCert, SessionKey: key, FlagOIDCConfig: oidcCfg, LogBuf: logs}
+	ctrl := &server.Controller{Catalog: cat, CA: ca, ClientCert: clientCert, RegistryCert: registryCert, SessionKey: key, FlagOIDCConfig: oidcCfg, LogBuf: logs}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -131,6 +173,22 @@ func run(listen, data string, poll time.Duration, oidcCfg webauth.Config, logs *
 	} else if n > 0 {
 		slog.Warn("marked runs interrupted by the last shutdown as failed", "count", n)
 	}
+	// Create the registration secret now so `token` can read it, and log
+	// where agents register.
+	if _, err := ctrl.RegistrationSecret(ctx); err != nil {
+		return fmt.Errorf("registration secret: %w", err)
+	}
+	agentLis, err := net.Listen("tcp", agentListen)
+	if err != nil {
+		return fmt.Errorf("agent registration listener: %w", err)
+	}
+	go func() {
+		if err := ctrl.ServeRegistry(ctx, agentLis); err != nil {
+			slog.Error("agent registration listener", "err", err)
+		}
+	}()
+	slog.Info("agent registration listening", "addr", agentListen, "token", "see the Agents page or run: voidgrid-backup-server token")
+
 	go ctrl.Poll(ctx, poll)
 	go ctrl.Schedule(ctx, 30*time.Second)
 

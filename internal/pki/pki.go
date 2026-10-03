@@ -105,22 +105,13 @@ func LoadOrCreateCA(dir string) (*CA, error) {
 	return &CA{Cert: cert, Key: key}, nil
 }
 
-// SignAgentCSR issues an agent certificate for agentID. The CSR's key must be
-// the key pinned from the agent's bootstrap certificate during enrollment.
-func (ca *CA) SignAgentCSR(csrDER []byte, agentID string, pinned crypto.PublicKey) ([]byte, error) {
-	csr, err := x509.ParseCertificateRequest(csrDER)
-	if err != nil {
-		return nil, fmt.Errorf("parse CSR: %w", err)
-	}
-	if err := csr.CheckSignature(); err != nil {
-		return nil, fmt.Errorf("CSR signature: %w", err)
-	}
-	if csr.Subject.CommonName != agentID {
-		return nil, fmt.Errorf("CSR is for %q, expected %q", csr.Subject.CommonName, agentID)
-	}
-	pub, ok := csr.PublicKey.(*ecdsa.PublicKey)
-	if !ok || !pub.Equal(pinned) {
-		return nil, errors.New("CSR key does not match the pinned bootstrap certificate")
+// SignAgentKey issues an agent certificate for agentID over pub, the public
+// key from the agent's own self-signed certificate. No CSR is involved: the
+// registration listener already saw that key in the agent's TLS handshake,
+// which proved the agent holds it.
+func (ca *CA) SignAgentKey(agentID string, pub crypto.PublicKey) ([]byte, error) {
+	if _, ok := pub.(*ecdsa.PublicKey); !ok {
+		return nil, errors.New("agent key is not an ECDSA key")
 	}
 	serial, err := newSerial()
 	if err != nil {
@@ -179,6 +170,35 @@ func LoadOrCreateClientCert(dir string, ca *CA) (tls.Certificate, error) {
 	return TLSCert(der, key), nil
 }
 
+// LoadOrCreateServerTLSCert loads the certificate the server's agent
+// registration listener presents (registry.crt/registry.key in dir), creating a
+// self-signed one on first use. Agents don't validate it against any CA: the
+// registration token carries its fingerprint, so it needs no domain name and
+// no public certificate.
+func LoadOrCreateServerTLSCert(dir string) (tls.Certificate, error) {
+	certPath, keyPath := filepath.Join(dir, "registry.crt"), filepath.Join(dir, "registry.key")
+	if exists, err := fileExists(certPath); err != nil {
+		return tls.Certificate{}, err
+	} else if exists {
+		return tls.LoadX509KeyPair(certPath, keyPath)
+	}
+	key, err := NewKey()
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	der, err := SelfSigned(key, "voidgrid-backup-server registration")
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	if err := WriteKey(keyPath, key); err != nil {
+		return tls.Certificate{}, err
+	}
+	if err := WriteCert(certPath, der); err != nil {
+		return tls.Certificate{}, err
+	}
+	return TLSCert(der, key), nil
+}
+
 // NewKey generates an ECDSA P-256 key.
 func NewKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -200,13 +220,6 @@ func SelfSigned(key *ecdsa.PrivateKey, cn string) ([]byte, error) {
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
 	return x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-}
-
-// CSR returns a DER certificate request for key with the given common name.
-func CSR(key *ecdsa.PrivateKey, cn string) ([]byte, error) {
-	return x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
-		Subject: pkix.Name{CommonName: cn},
-	}, key)
 }
 
 // TLSCert pairs a DER certificate with its key.

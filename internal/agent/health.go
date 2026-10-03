@@ -13,7 +13,7 @@ import (
 type HealthStatus struct {
 	Healthy  bool   `json:"healthy"`
 	GRPC     string `json:"grpc"`     // "ok" or the dial error
-	Enrolled bool   `json:"enrolled"` // false: waiting for the enrollment code
+	Enrolled bool   `json:"enrolled"` // false: waiting for the server to approve this agent
 	Docker   string `json:"docker"`   // "ok", "disabled" or the error
 	Libvirt  string `json:"libvirt"`  // "ok", "disabled" or the error
 	DataDir  string `json:"data_dir"` // "ok" or why it can't be written

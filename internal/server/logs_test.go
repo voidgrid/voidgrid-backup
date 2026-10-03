@@ -17,7 +17,6 @@ func testLogger(b *logbuf.Buffer) *slog.Logger {
 }
 
 func TestLogsPage(t *testing.T) {
-	ctx := context.Background()
 	a, addr := startAgent(t, t.TempDir())
 	agentBuf := logbuf.New(50)
 	a.LogBuf = agentBuf
@@ -31,7 +30,7 @@ func TestLogsPage(t *testing.T) {
 	sl.Info("backup finished", "job", "activity", "status", "success")
 	sl.Error("repository unreachable", "err", "timeout")
 
-	ag, err := c.Enroll(ctx, "box", addr, a.EnrollmentCode())
+	ag, err := enrollTestAgent(t, c, a, "box", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +61,7 @@ func TestLogsPage(t *testing.T) {
 		t.Errorf("agent log page: %s", apage)
 	}
 	if strings.Contains(apage, "SECRET-CODE-123") {
-		t.Error("an enrollment code reached the page")
+		t.Error("a registration or setup secret reached the page")
 	}
 	if strings.Contains(apage, "backup finished") {
 		t.Error("the agent page shows the server's lines")
@@ -73,7 +72,7 @@ func TestLogsErrors(t *testing.T) {
 	ctx := context.Background()
 	a, addr := startAgent(t, t.TempDir()) // captures nothing
 	c := newController(t)
-	ag, err := c.Enroll(ctx, "box", addr, a.EnrollmentCode())
+	ag, err := enrollTestAgent(t, c, a, "box", addr)
 	if err != nil {
 		t.Fatal(err)
 	}

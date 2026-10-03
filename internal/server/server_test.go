@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
-	"encoding/base32"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
@@ -12,8 +11,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -35,7 +36,7 @@ func startAgent(t *testing.T, dir string) (*agent.Agent, string) {
 
 func startAgentWithDocker(t *testing.T, dir, dockerSocket string) (*agent.Agent, string) {
 	t.Helper()
-	a, err := agent.New(dir, "test-host", dockerSocket)
+	a, err := agent.New(dir, dockerSocket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,11 @@ func newController(t *testing.T) *Controller {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Controller{Catalog: cat, CA: ca, ClientCert: client, SessionKey: key, auth: auth}
+	registry, err := pki.LoadOrCreateServerTLSCert(filepath.Join(dir, "pki"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Controller{Catalog: cat, CA: ca, ClientCert: client, RegistryCert: registry, SessionKey: key, auth: auth}
 }
 
 // authedClient completes setup for c if it hasn't been already, and returns
@@ -124,90 +129,96 @@ func anonPing(t *testing.T, addr string) error {
 	return err
 }
 
-func TestEnrollPingAndRestart(t *testing.T) {
+// enrollTestAgent registers a with c over a loopback registration listener,
+// approves it as name at addr, and waits until the server has reached it over
+// mTLS, the way an operator's registration and approval end up.
+func enrollTestAgent(t *testing.T, c *Controller, a *agent.Agent, name, addr string) (catalog.Agent, error) {
+	t.Helper()
+	ctx := context.Background()
+	regAddr := startRegistry(t, c)
+	token, err := c.RegistrationToken(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rctx, cancel := context.WithCancel(ctx)
+	t.Cleanup(cancel)
+	go a.Register(rctx, agent.RegisterConfig{Server: regAddr, Token: token, ListenPort: port, PollEvery: 20 * time.Millisecond})
+
+	var reg catalog.Registration
+	waitFor(t, "the agent's registration", func() bool {
+		list, err := c.Catalog.ListRegistrations(ctx)
+		if err == nil && len(list) == 1 {
+			reg = list[0]
+			return true
+		}
+		return false
+	})
+	ag, err := c.ApproveRegistration(ctx, reg.ID, name, addr, "")
+	if err != nil {
+		return catalog.Agent{}, err
+	}
+	waitFor(t, "the agent to collect its certificate", func() bool { return a.ID() != "" })
+	if err := c.Check(ctx, ag); err != nil {
+		return ag, err
+	}
+	return c.Catalog.Agent(ctx, ag.ID)
+}
+
+func waitFor(t *testing.T, what string, ok func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !ok() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestRegisterPingAndRestart(t *testing.T) {
 	ctx := context.Background()
 	agentDir := t.TempDir()
 	a, addr := startAgent(t, agentDir)
-	code := a.EnrollmentCode()
-	if code == "" {
-		t.Fatal("fresh agent has no enrollment code")
+	if a.ID() != "" {
+		t.Fatal("fresh agent claims an identity")
 	}
 	if err := anonPing(t, addr); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("Ping before enrollment: %v", err)
 	}
 
 	c := newController(t)
-	got, err := c.Enroll(ctx, "box", addr, code)
+	got, err := enrollTestAgent(t, c, a, "box", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.LastSeen.IsZero() || got.LastError != "" || got.Hostname != "test-host" || got.ID != a.ID() {
+	if got.LastSeen.IsZero() || got.LastError != "" || got.ID != a.ID() || got.Name != "box" {
 		t.Fatalf("enrolled agent record: %+v (agent ID %q)", got, a.ID())
-	}
-	if a.EnrollmentCode() != "" {
-		t.Fatal("agent still offers an enrollment code after enrolling")
-	}
-
-	// The code is single-use.
-	if _, err := c.Enroll(ctx, "box2", addr, code); err == nil {
-		t.Fatal("enrollment code worked twice")
 	}
 	// Without the server's client cert the agent refuses the handshake.
 	if err := anonPing(t, addr); err == nil {
 		t.Fatal("enrolled agent answered a client without a certificate")
 	}
+	// The approved registration row is gone once the server reached the agent.
+	if list, _ := c.Catalog.ListRegistrations(ctx); len(list) != 0 {
+		t.Fatalf("registrations left: %+v", list)
+	}
 
 	// A restart from the same directory keeps the identity.
 	a2, addr2 := startAgent(t, agentDir)
-	if a2.ID() != got.ID || a2.EnrollmentCode() != "" {
-		t.Fatalf("restarted agent: id %q code %q", a2.ID(), a2.EnrollmentCode())
+	if a2.ID() != got.ID {
+		t.Fatalf("restarted agent: id %q, want %q", a2.ID(), got.ID)
 	}
 	got.Address = addr2
 	if err := c.Check(ctx, got); err != nil {
 		t.Fatalf("Check after restart: %v", err)
-	}
-}
-
-func TestEnrollRejectsWrongAgent(t *testing.T) {
-	a, _ := startAgent(t, t.TempDir())
-	_, otherAddr := startAgent(t, t.TempDir())
-	c := newController(t)
-	_, err := c.Enroll(context.Background(), "box", otherAddr, a.EnrollmentCode())
-	if err == nil || !strings.Contains(err.Error(), "does not match the enrollment code") {
-		t.Fatalf("enrolling the wrong agent: %v", err)
-	}
-	if list, _ := c.Catalog.ListAgents(context.Background()); len(list) != 0 {
-		t.Fatalf("failed enrollment left records: %+v", list)
-	}
-}
-
-func TestEnrollRejectsWrongSecret(t *testing.T) {
-	a, addr := startAgent(t, t.TempDir())
-	parts := strings.Split(a.EnrollmentCode(), "-")
-	parts[1] = strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(make([]byte, 20)))
-	c := newController(t)
-	_, err := c.Enroll(context.Background(), "box", addr, strings.Join(parts, "-"))
-	if status.Code(unwrap(err)) != codes.PermissionDenied {
-		t.Fatalf("wrong secret: %v", err)
-	}
-	if a.EnrollmentCode() == "" {
-		t.Fatal("agent enrolled with the wrong secret")
-	}
-}
-
-func TestEnrollRejectsDuplicateName(t *testing.T) {
-	ctx := context.Background()
-	c := newController(t)
-	a1, addr1 := startAgent(t, t.TempDir())
-	if _, err := c.Enroll(ctx, "box", addr1, a1.EnrollmentCode()); err != nil {
-		t.Fatal(err)
-	}
-	a2, addr2 := startAgent(t, t.TempDir())
-	if _, err := c.Enroll(ctx, "box", addr2, a2.EnrollmentCode()); err != ErrNameTaken {
-		t.Fatalf("duplicate name: %v", err)
-	}
-	if a2.EnrollmentCode() == "" {
-		t.Fatal("agent was enrolled even though the name was taken")
 	}
 }
 
@@ -248,7 +259,7 @@ func TestHTTP(t *testing.T) {
 		t.Fatalf("cross-site POST = %d, want 403 even while signed in", resp.StatusCode)
 	}
 
-	req, _ = http.NewRequest("POST", srv.URL+"/agents", strings.NewReader(form.Encode()))
+	req, _ = http.NewRequest("POST", srv.URL+"/agents/registrations/nope/approve", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	resp, err = client.Do(req)
@@ -257,7 +268,7 @@ func TestHTTP(t *testing.T) {
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("POST with a bad code = %d, want 400", resp.StatusCode)
+		t.Fatalf("approving an unknown registration = %d, want 400", resp.StatusCode)
 	}
 
 	resp, err = client.Get(srv.URL + "/api/agents")

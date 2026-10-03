@@ -17,7 +17,7 @@ import (
 const maxFieldLen = 2000
 
 // secretKey matches attribute names whose values must not be kept: the
-// buffer is shown in a web page, and these include one-time enrollment codes
+// buffer is shown in a web page, and these include registration tokens
 // and setup tokens.
 var secretKey = regexp.MustCompile(`(?i)code|token|secret|password|passwd|key`)
 

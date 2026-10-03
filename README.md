@@ -50,15 +50,14 @@ Open `http://<host>:<VB_PORT>/`. Full detail: [docs/server.md](docs/server.md).
 **2. Run an agent on each host with something to back up:**
 
 ```sh
-cp examples/agent/.env.example examples/agent/.env   # then edit it
+cp examples/agent/.env.example examples/agent/.env   # then edit it: VB_SERVER and VB_TOKEN
 cd examples/agent
 docker compose up -d
-docker compose logs agent | grep code   # the one-time enrollment code
 ```
 
 *It runs as root with a minimal set of capabilities and mounts its sources read-only; [docs/agent.md](docs/agent.md) explains why.*
 
-**3.** Enroll the agent on the server's Agents page with that code and the address the server can reach it on (`host:VB_PORT`).
+**3.** The agent registers itself and shows up on the server's Agents page under "Waiting for approval". Approve it there and pick its name. The token for `VB_TOKEN` is on the same page (or `docker exec voidgrid-backup-server /usr/local/bin/voidgrid-backup-server token`), and `VB_SERVER` is the server's host and agent port (default 9442).
 
 **4.** Add a repository, then path, stack or VM jobs.
 

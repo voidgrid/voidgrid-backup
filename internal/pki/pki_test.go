@@ -20,26 +20,14 @@ func TestCAPersists(t *testing.T) {
 	}
 }
 
-func TestSignAgentCSR(t *testing.T) {
+func TestSignAgentKey(t *testing.T) {
 	ca, err := LoadOrCreateCA(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	key, _ := NewKey()
-	other, _ := NewKey()
-	csr, err := CSR(key, "a1")
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	if _, err := ca.SignAgentCSR(csr, "a1", &other.PublicKey); err == nil {
-		t.Fatal("signed a CSR whose key does not match the pinned key")
-	}
-	if _, err := ca.SignAgentCSR(csr, "a2", &key.PublicKey); err == nil {
-		t.Fatal("signed a CSR for the wrong agent ID")
-	}
-
-	der, err := ca.SignAgentCSR(csr, "a1", &key.PublicKey)
+	der, err := ca.SignAgentKey("a1", &key.PublicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,12 +35,40 @@ func TestSignAgentCSR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if cert.Subject.CommonName != "a1" || !key.PublicKey.Equal(cert.PublicKey) {
+		t.Fatalf("certificate is for CN=%q or the wrong key", cert.Subject.CommonName)
+	}
 	if _, err := cert.Verify(x509.VerifyOptions{
 		Roots:     ca.Pool(),
 		DNSName:   AgentDNSName("a1"),
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}); err != nil {
 		t.Fatalf("agent cert does not verify: %v", err)
+	}
+	if _, err := cert.Verify(x509.VerifyOptions{Roots: ca.Pool(), DNSName: AgentDNSName("a2"), KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}); err == nil {
+		t.Fatal("certificate for a1 verified as a2")
+	}
+	if _, err := ca.SignAgentKey("a1", "not a key"); err == nil {
+		t.Fatal("signed something that is not an ECDSA key")
+	}
+}
+
+func TestServerTLSCertPersists(t *testing.T) {
+	dir := t.TempDir()
+	c1, err := LoadOrCreateServerTLSCert(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2, err := LoadOrCreateServerTLSCert(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(c1.Certificate[0]) != string(c2.Certificate[0]) {
+		t.Fatal("reloaded registration cert differs")
+	}
+	leaf, _ := x509.ParseCertificate(c1.Certificate[0])
+	if leaf.Issuer.String() != leaf.Subject.String() {
+		t.Fatal("registration cert should be self-signed")
 	}
 }
 

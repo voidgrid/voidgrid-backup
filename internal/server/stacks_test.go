@@ -53,7 +53,7 @@ func TestStackJobEndToEnd(t *testing.T) {
 
 	a, addr := startAgentWithDocker(t, t.TempDir(), fake.Socket)
 	c := newController(t)
-	ag, err := c.Enroll(ctx, "box", addr, a.EnrollmentCode())
+	ag, err := enrollTestAgent(t, c, a, "box", addr)
 	if err != nil {
 		t.Fatal(err)
 	}

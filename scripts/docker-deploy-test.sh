@@ -2,7 +2,10 @@
 # Boots the actual built image the way examples/server/ and examples/agent/
 # describe it, and confirms both containers' health checks pass: the
 # server's nonroot user + writable ./data, and the agent's cap_drop/cap_add
-# set under its own reduced capabilities. This is the one thing CI's
+# set under its own reduced capabilities. It also reads the registration
+# token from the running server (the `token` subcommand), gives it to the
+# agent, and confirms the agent registers (approval needs a signed-in UI
+# session, which the Go tests cover). This is the one thing CI's
 # `go vet`/`go test`-in-the-build doesn't cover.
 #
 # Runs from throwaway copies of the example directories under .cache/, with
@@ -29,8 +32,8 @@ server_compose="$scratch/server/docker-compose.yaml"
 agent_compose="$scratch/agent/docker-compose.yaml"
 
 cleanup() {
-  docker compose -f "$server_compose" --env-file "$scratch/server/.env" -p "hbdt-server-$id" down -v --remove-orphans >/dev/null 2>&1 || true
-  docker compose -f "$agent_compose" --env-file "$scratch/agent/.env" -p "hbdt-agent-$id" down -v --remove-orphans >/dev/null 2>&1 || true
+  docker compose -f "$server_compose" --env-file "$scratch/server/.env" -p "vbdt-server-$id" down -v --remove-orphans >/dev/null 2>&1 || true
+  docker compose -f "$agent_compose" --env-file "$scratch/agent/.env" -p "vbdt-agent-$id" down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$scratch"
   docker rmi "$img" >/dev/null 2>&1 || true
 }
@@ -46,8 +49,10 @@ cp examples/agent/docker-compose.yaml examples/agent/.env.example "$scratch/agen
 # --- server: nonroot, VB_UID/GID set to whoever runs this so ./data is
 # writable without sudo-chowning it to the example's default 65532. ---
 port_server=18080
+port_register=18442
 sed -e "s#^VB_IMAGE=.*#VB_IMAGE=$img#" \
     -e "s#^VB_PORT=.*#VB_PORT=$port_server#" \
+    -e "s#^VB_AGENT_PORT=.*#VB_AGENT_PORT=$port_register#" \
     -e "s#^VB_UID=.*#VB_UID=$(id -u)#" \
     -e "s#^VB_GID=.*#VB_GID=$(id -g)#" \
     "$scratch/server/.env.example" >"$scratch/server/.env"
@@ -71,11 +76,6 @@ sed -e "s#^VB_IMAGE=.*#VB_IMAGE=$img#" \
     -e "s#^RESTORE_DIR=.*#RESTORE_DIR=$scratch/agent/srv-restore#" \
     -e "s#^SFTP_KEY=.*#SFTP_KEY=$scratch/agent/sftp_key#" \
     "$scratch/agent/.env.example" >"$scratch/agent/.env"
-
-echo "==> starting server"
-docker compose -f "$server_compose" --env-file "$scratch/server/.env" -p "hbdt-server-$id" up -d
-echo "==> starting agent"
-docker compose -f "$agent_compose" --env-file "$scratch/agent/.env" -p "hbdt-agent-$id" up -d
 
 wait_healthy() {
   name="$1"
@@ -102,9 +102,48 @@ wait_healthy() {
   return 1
 }
 
+echo "==> starting server"
+docker compose -f "$server_compose" --env-file "$scratch/server/.env" -p "vbdt-server-$id" up -d
 ok=1
 wait_healthy voidgrid-backup-server || ok=0
-wait_healthy voidgrid-backup-agent || ok=0
+
+if [ "$ok" = 1 ]; then
+  echo "==> reading the registration token from the running server"
+  token=$(docker exec voidgrid-backup-server /usr/local/bin/voidgrid-backup-server token) || ok=0
+  case "$token" in
+  vbr1-*) ;;
+  *)
+    echo "server: 'token' printed something that is not a registration token"
+    ok=0
+    ;;
+  esac
+fi
+
+if [ "$ok" = 1 ]; then
+  # The agent is in a different compose project, so it reaches the server's
+  # published registration port through the Docker bridge gateway.
+  gateway=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
+  sed -i -e "s#^VB_SERVER=.*#VB_SERVER=$gateway:$port_register#" \
+         -e "s#^VB_TOKEN=.*#VB_TOKEN=$token#" "$scratch/agent/.env"
+  echo "==> starting agent"
+  docker compose -f "$agent_compose" --env-file "$scratch/agent/.env" -p "vbdt-agent-$id" up -d
+  wait_healthy voidgrid-backup-agent || ok=0
+fi
+
+if [ "$ok" = 1 ]; then
+  echo "==> confirming the agent registered with the server"
+  tries=15
+  until docker logs voidgrid-backup-agent 2>&1 | grep -q 'registered with the server'; do
+    tries=$((tries - 1))
+    if [ "$tries" -le 0 ]; then
+      echo "agent: never logged that it registered"
+      docker logs voidgrid-backup-agent 2>&1 | tail -20
+      ok=0
+      break
+    fi
+    sleep 2
+  done
+fi
 
 if [ "$ok" = 1 ]; then
   echo "==> confirming the published port actually answers, not just the in-container probe"
@@ -115,7 +154,7 @@ if [ "$ok" = 1 ]; then
 fi
 
 if [ "$ok" = 1 ]; then
-  echo "PASS: both containers booted from the example configs and are healthy"
+  echo "PASS: both containers booted from the example configs, are healthy, and the agent registered"
 else
   echo "FAIL"
   exit 1

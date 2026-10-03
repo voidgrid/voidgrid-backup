@@ -1,15 +1,15 @@
 // Package agent implements the gRPC service each host runs.
 //
-// An agent starts unenrolled: it serves a self-signed bootstrap certificate,
-// accepts only the enrollment RPCs, and logs an enrollment code. Once the
-// server completes enrollment the agent requires the server's client
-// certificate for every RPC and refuses enrollment.
+// An agent starts unenrolled: it generates a key and a self-signed
+// certificate, then registers with the server (see Register) using the token
+// from its configuration. Once an operator approves it, the server issues a
+// certificate for that key and the agent requires the server's client
+// certificate for every RPC.
 package agent
 
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -17,7 +17,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sync"
 	"time"
 
@@ -30,7 +29,6 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/caps"
 	"github.com/voidgrid/voidgrid-backup/internal/docker"
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
-	"github.com/voidgrid/voidgrid-backup/internal/enroll"
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
@@ -42,16 +40,16 @@ import (
 const (
 	fileKey       = "agent.key"
 	fileBootstrap = "bootstrap.crt"
-	fileSecret    = "enroll.secret"
 	fileCert      = "agent.crt"
 	fileCA        = "ca.crt"
 )
 
-var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
-
 type Agent struct {
 	agentpb.UnimplementedAgentServer
 
+	// engine is created once the agent has an identity: its Kopia host name
+	// is the server-assigned agent ID. Nothing reaches it before that, since
+	// Interceptor refuses every RPC until the agent is enrolled.
 	engine *engine.Engine
 	// LogBuf, if set, holds this process's recent log lines for the Logs RPC.
 	LogBuf *logbuf.Buffer
@@ -62,15 +60,13 @@ type Agent struct {
 	opMu sync.Mutex
 
 	dir          string
-	hostname     string
+	hostname     string // the OS host name, only a suggestion for the operator
 	key          *ecdsa.PrivateKey
 	bootstrap    tls.Certificate
 	bootstrapDER []byte
 
-	mu        sync.Mutex
-	secret    []byte    // nil once enrolled
-	pendingID string    // set by Enroll, consumed by CompleteEnrollment
-	enrolled  *identity // nil until enrolled
+	mu       sync.Mutex
+	enrolled *identity // nil until enrolled
 }
 
 type identity struct {
@@ -79,21 +75,19 @@ type identity struct {
 	cas  *x509.CertPool
 }
 
-// New loads the agent's state from dir, creating a key, bootstrap
-// certificate and enrollment secret on first start.
-func New(dir, hostname, dockerSocket string) (*Agent, error) {
+// New loads the agent's state from dir, creating a key and a self-signed
+// certificate on first start.
+func New(dir, dockerSocket string) (*Agent, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	a := &Agent{dir: dir, hostname: hostname}
+	host, _ := os.Hostname()
+	a := &Agent{dir: dir, hostname: host}
 	if dockerSocket != "" {
 		a.docker = docker.New(dockerSocket)
 	}
 
 	var err error
-	if a.engine, err = engine.New(filepath.Join(dir, "kopia"), hostname); err != nil {
-		return nil, err
-	}
 	if a.key, err = loadOrCreateKey(filepath.Join(dir, fileKey)); err != nil {
 		return nil, err
 	}
@@ -103,38 +97,22 @@ func New(dir, hostname, dockerSocket string) (*Agent, error) {
 	a.bootstrap = pki.TLSCert(a.bootstrapDER, a.key)
 
 	if _, err := os.Stat(a.path(fileCert)); err == nil {
-		if a.enrolled, err = a.loadIdentity(); err != nil {
+		id, err := a.loadIdentity()
+		if err != nil {
 			return nil, err
 		}
+		if a.engine, err = engine.New(a.engineDir(), id.id); err != nil {
+			return nil, err
+		}
+		a.enrolled = id
 		return a, nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
-
-	if a.secret, err = os.ReadFile(a.path(fileSecret)); errors.Is(err, fs.ErrNotExist) {
-		if a.secret, err = enroll.NewSecret(); err != nil {
-			return nil, err
-		}
-		err = pki.WriteFileAtomic(a.path(fileSecret), a.secret, 0o600)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if len(a.secret) != enroll.SecretLen {
-		return nil, fmt.Errorf("%s is corrupt; delete it to get a new enrollment code", a.path(fileSecret))
-	}
 	return a, nil
 }
 
-// EnrollmentCode returns the code to give the server, or "" once enrolled.
-func (a *Agent) EnrollmentCode() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.enrolled != nil {
-		return ""
-	}
-	return enroll.Format(a.secret, a.bootstrapDER)
-}
+func (a *Agent) engineDir() string { return filepath.Join(a.dir, "kopia") }
 
 // ID returns the server-assigned agent ID, or "" before enrollment.
 func (a *Agent) ID() string {
@@ -181,14 +159,10 @@ func requireServerIdentity(_ [][]byte, chains [][]*x509.Certificate) error {
 	return nil
 }
 
-// Interceptor gates every RPC except enrollment behind a verified server
-// client certificate. It also covers a connection opened before enrollment
-// (bootstrap TLS, no client cert) that tries to call Ping afterwards.
+// Interceptor gates every RPC behind a verified server client certificate. It
+// also covers a connection opened before enrollment (bootstrap TLS, no client
+// cert) that tries to call an RPC afterwards.
 func (a *Agent) Interceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	switch info.FullMethod {
-	case agentpb.Agent_Enroll_FullMethodName, agentpb.Agent_CompleteEnrollment_FullMethodName:
-		return handler(ctx, req) // these check the enrollment secret themselves
-	}
 	if a.ID() == "" {
 		return nil, status.Error(codes.FailedPrecondition, "agent is not enrolled")
 	}
@@ -201,68 +175,6 @@ func (a *Agent) Interceptor(ctx context.Context, req any, info *grpc.UnaryServer
 		return nil, status.Error(codes.Unauthenticated, "server client certificate required")
 	}
 	return handler(ctx, req)
-}
-
-func (a *Agent) Enroll(_ context.Context, req *agentpb.EnrollRequest) (*agentpb.EnrollResponse, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if err := a.checkSecretLocked(req.GetSecret()); err != nil {
-		return nil, err
-	}
-	if !idPattern.MatchString(req.GetAgentId()) {
-		return nil, status.Error(codes.InvalidArgument, "invalid agent ID")
-	}
-	csr, err := pki.CSR(a.key, req.GetAgentId())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create CSR: %v", err)
-	}
-	a.pendingID = req.GetAgentId()
-	return &agentpb.EnrollResponse{CsrDer: csr, Hostname: a.hostname, Version: version.Version}, nil
-}
-
-func (a *Agent) CompleteEnrollment(_ context.Context, req *agentpb.CompleteEnrollmentRequest) (*agentpb.CompleteEnrollmentResponse, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if err := a.checkSecretLocked(req.GetSecret()); err != nil {
-		return nil, err
-	}
-	if a.pendingID == "" {
-		return nil, status.Error(codes.FailedPrecondition, "call Enroll first")
-	}
-	ca, err := x509.ParseCertificate(req.GetCaDer())
-	if err != nil || !ca.IsCA {
-		return nil, status.Error(codes.InvalidArgument, "invalid CA certificate")
-	}
-	cert, err := x509.ParseCertificate(req.GetCertDer())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid agent certificate")
-	}
-	pool := x509.NewCertPool()
-	pool.AddCert(ca)
-	if _, err := cert.Verify(x509.VerifyOptions{
-		Roots:     pool,
-		DNSName:   pki.AgentDNSName(a.pendingID),
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "agent certificate does not verify: %v", err)
-	}
-	if cert.Subject.CommonName != a.pendingID || !a.key.PublicKey.Equal(cert.PublicKey) {
-		return nil, status.Error(codes.InvalidArgument, "agent certificate is not for this agent")
-	}
-
-	// agent.crt last: its presence is what marks the agent enrolled.
-	if err := pki.WriteCert(a.path(fileCA), req.GetCaDer()); err != nil {
-		return nil, status.Errorf(codes.Internal, "save CA: %v", err)
-	}
-	if err := pki.WriteCert(a.path(fileCert), req.GetCertDer()); err != nil {
-		return nil, status.Errorf(codes.Internal, "save certificate: %v", err)
-	}
-	if err := os.Remove(a.path(fileSecret)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, status.Errorf(codes.Internal, "remove enrollment secret: %v", err)
-	}
-	a.enrolled = &identity{id: a.pendingID, cert: pki.TLSCert(req.GetCertDer(), a.key), cas: pool}
-	a.secret, a.pendingID = nil, ""
-	return &agentpb.CompleteEnrollmentResponse{}, nil
 }
 
 func (a *Agent) Ping(context.Context, *agentpb.PingRequest) (*agentpb.PingResponse, error) {
@@ -280,16 +192,6 @@ func (a *Agent) Ping(context.Context, *agentpb.PingRequest) (*agentpb.PingRespon
 		resp.MissingCapabilities = c.Missing
 	}
 	return resp, nil
-}
-
-func (a *Agent) checkSecretLocked(got []byte) error {
-	if a.enrolled != nil {
-		return status.Error(codes.FailedPrecondition, "agent is already enrolled")
-	}
-	if subtle.ConstantTimeCompare(got, a.secret) != 1 {
-		return status.Error(codes.PermissionDenied, "wrong enrollment secret")
-	}
-	return nil
 }
 
 func (a *Agent) path(name string) string { return filepath.Join(a.dir, name) }

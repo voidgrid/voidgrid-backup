@@ -1062,216 +1062,6 @@ func (x *RestoreResponse) GetWarnings() []string {
 	return nil
 }
 
-type EnrollRequest struct {
-	state  protoimpl.MessageState `protogen:"open.v1"`
-	Secret []byte                 `protobuf:"bytes,1,opt,name=secret,proto3" json:"secret,omitempty"`
-	// Identity the server assigns; the agent puts it in its CSR.
-	AgentId       string `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *EnrollRequest) Reset() {
-	*x = EnrollRequest{}
-	mi := &file_agent_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *EnrollRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*EnrollRequest) ProtoMessage() {}
-
-func (x *EnrollRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use EnrollRequest.ProtoReflect.Descriptor instead.
-func (*EnrollRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *EnrollRequest) GetSecret() []byte {
-	if x != nil {
-		return x.Secret
-	}
-	return nil
-}
-
-func (x *EnrollRequest) GetAgentId() string {
-	if x != nil {
-		return x.AgentId
-	}
-	return ""
-}
-
-type EnrollResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// PKCS#10 CSR (DER) over the same key as the bootstrap cert.
-	CsrDer        []byte `protobuf:"bytes,1,opt,name=csr_der,json=csrDer,proto3" json:"csr_der,omitempty"`
-	Hostname      string `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Version       string `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *EnrollResponse) Reset() {
-	*x = EnrollResponse{}
-	mi := &file_agent_proto_msgTypes[16]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *EnrollResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*EnrollResponse) ProtoMessage() {}
-
-func (x *EnrollResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[16]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use EnrollResponse.ProtoReflect.Descriptor instead.
-func (*EnrollResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{16}
-}
-
-func (x *EnrollResponse) GetCsrDer() []byte {
-	if x != nil {
-		return x.CsrDer
-	}
-	return nil
-}
-
-func (x *EnrollResponse) GetHostname() string {
-	if x != nil {
-		return x.Hostname
-	}
-	return ""
-}
-
-func (x *EnrollResponse) GetVersion() string {
-	if x != nil {
-		return x.Version
-	}
-	return ""
-}
-
-type CompleteEnrollmentRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Secret        []byte                 `protobuf:"bytes,1,opt,name=secret,proto3" json:"secret,omitempty"`
-	CertDer       []byte                 `protobuf:"bytes,2,opt,name=cert_der,json=certDer,proto3" json:"cert_der,omitempty"`
-	CaDer         []byte                 `protobuf:"bytes,3,opt,name=ca_der,json=caDer,proto3" json:"ca_der,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CompleteEnrollmentRequest) Reset() {
-	*x = CompleteEnrollmentRequest{}
-	mi := &file_agent_proto_msgTypes[17]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CompleteEnrollmentRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CompleteEnrollmentRequest) ProtoMessage() {}
-
-func (x *CompleteEnrollmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[17]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CompleteEnrollmentRequest.ProtoReflect.Descriptor instead.
-func (*CompleteEnrollmentRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{17}
-}
-
-func (x *CompleteEnrollmentRequest) GetSecret() []byte {
-	if x != nil {
-		return x.Secret
-	}
-	return nil
-}
-
-func (x *CompleteEnrollmentRequest) GetCertDer() []byte {
-	if x != nil {
-		return x.CertDer
-	}
-	return nil
-}
-
-func (x *CompleteEnrollmentRequest) GetCaDer() []byte {
-	if x != nil {
-		return x.CaDer
-	}
-	return nil
-}
-
-type CompleteEnrollmentResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CompleteEnrollmentResponse) Reset() {
-	*x = CompleteEnrollmentResponse{}
-	mi := &file_agent_proto_msgTypes[18]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CompleteEnrollmentResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CompleteEnrollmentResponse) ProtoMessage() {}
-
-func (x *CompleteEnrollmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[18]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CompleteEnrollmentResponse.ProtoReflect.Descriptor instead.
-func (*CompleteEnrollmentResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{18}
-}
-
 type PingRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1280,7 +1070,7 @@ type PingRequest struct {
 
 func (x *PingRequest) Reset() {
 	*x = PingRequest{}
-	mi := &file_agent_proto_msgTypes[19]
+	mi := &file_agent_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1292,7 +1082,7 @@ func (x *PingRequest) String() string {
 func (*PingRequest) ProtoMessage() {}
 
 func (x *PingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[19]
+	mi := &file_agent_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1305,7 +1095,7 @@ func (x *PingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
 func (*PingRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{19}
+	return file_agent_proto_rawDescGZIP(), []int{15}
 }
 
 type PingResponse struct {
@@ -1323,7 +1113,7 @@ type PingResponse struct {
 
 func (x *PingResponse) Reset() {
 	*x = PingResponse{}
-	mi := &file_agent_proto_msgTypes[20]
+	mi := &file_agent_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1335,7 +1125,7 @@ func (x *PingResponse) String() string {
 func (*PingResponse) ProtoMessage() {}
 
 func (x *PingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[20]
+	mi := &file_agent_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1348,7 +1138,7 @@ func (x *PingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
 func (*PingResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{20}
+	return file_agent_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PingResponse) GetAgentId() string {
@@ -1401,7 +1191,7 @@ type ListStacksRequest struct {
 
 func (x *ListStacksRequest) Reset() {
 	*x = ListStacksRequest{}
-	mi := &file_agent_proto_msgTypes[21]
+	mi := &file_agent_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1413,7 +1203,7 @@ func (x *ListStacksRequest) String() string {
 func (*ListStacksRequest) ProtoMessage() {}
 
 func (x *ListStacksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[21]
+	mi := &file_agent_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1426,7 +1216,7 @@ func (x *ListStacksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStacksRequest.ProtoReflect.Descriptor instead.
 func (*ListStacksRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{21}
+	return file_agent_proto_rawDescGZIP(), []int{17}
 }
 
 type Mount struct {
@@ -1443,7 +1233,7 @@ type Mount struct {
 
 func (x *Mount) Reset() {
 	*x = Mount{}
-	mi := &file_agent_proto_msgTypes[22]
+	mi := &file_agent_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1455,7 +1245,7 @@ func (x *Mount) String() string {
 func (*Mount) ProtoMessage() {}
 
 func (x *Mount) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[22]
+	mi := &file_agent_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1468,7 +1258,7 @@ func (x *Mount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Mount.ProtoReflect.Descriptor instead.
 func (*Mount) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{22}
+	return file_agent_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Mount) GetType() string {
@@ -1522,7 +1312,7 @@ type Service struct {
 
 func (x *Service) Reset() {
 	*x = Service{}
-	mi := &file_agent_proto_msgTypes[23]
+	mi := &file_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1534,7 +1324,7 @@ func (x *Service) String() string {
 func (*Service) ProtoMessage() {}
 
 func (x *Service) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[23]
+	mi := &file_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1547,7 +1337,7 @@ func (x *Service) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Service.ProtoReflect.Descriptor instead.
 func (*Service) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{23}
+	return file_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Service) GetName() string {
@@ -1611,7 +1401,7 @@ type Stack struct {
 
 func (x *Stack) Reset() {
 	*x = Stack{}
-	mi := &file_agent_proto_msgTypes[24]
+	mi := &file_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1623,7 +1413,7 @@ func (x *Stack) String() string {
 func (*Stack) ProtoMessage() {}
 
 func (x *Stack) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[24]
+	mi := &file_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1636,7 +1426,7 @@ func (x *Stack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Stack.ProtoReflect.Descriptor instead.
 func (*Stack) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{24}
+	return file_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Stack) GetProject() string {
@@ -1676,7 +1466,7 @@ type ListStacksResponse struct {
 
 func (x *ListStacksResponse) Reset() {
 	*x = ListStacksResponse{}
-	mi := &file_agent_proto_msgTypes[25]
+	mi := &file_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1688,7 +1478,7 @@ func (x *ListStacksResponse) String() string {
 func (*ListStacksResponse) ProtoMessage() {}
 
 func (x *ListStacksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[25]
+	mi := &file_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1701,7 +1491,7 @@ func (x *ListStacksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStacksResponse.ProtoReflect.Descriptor instead.
 func (*ListStacksResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{25}
+	return file_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListStacksResponse) GetStacks() []*Stack {
@@ -1728,7 +1518,7 @@ type StackSpec struct {
 
 func (x *StackSpec) Reset() {
 	*x = StackSpec{}
-	mi := &file_agent_proto_msgTypes[26]
+	mi := &file_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1740,7 +1530,7 @@ func (x *StackSpec) String() string {
 func (*StackSpec) ProtoMessage() {}
 
 func (x *StackSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[26]
+	mi := &file_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1753,7 +1543,7 @@ func (x *StackSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StackSpec.ProtoReflect.Descriptor instead.
 func (*StackSpec) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{26}
+	return file_agent_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *StackSpec) GetProject() string {
@@ -1813,7 +1603,7 @@ type RestoreStackRequest struct {
 
 func (x *RestoreStackRequest) Reset() {
 	*x = RestoreStackRequest{}
-	mi := &file_agent_proto_msgTypes[27]
+	mi := &file_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1825,7 +1615,7 @@ func (x *RestoreStackRequest) String() string {
 func (*RestoreStackRequest) ProtoMessage() {}
 
 func (x *RestoreStackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[27]
+	mi := &file_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1838,7 +1628,7 @@ func (x *RestoreStackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreStackRequest.ProtoReflect.Descriptor instead.
 func (*RestoreStackRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{27}
+	return file_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RestoreStackRequest) GetRepository() *Repository {
@@ -1880,7 +1670,7 @@ type ImportDumpRequest struct {
 
 func (x *ImportDumpRequest) Reset() {
 	*x = ImportDumpRequest{}
-	mi := &file_agent_proto_msgTypes[28]
+	mi := &file_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1892,7 +1682,7 @@ func (x *ImportDumpRequest) String() string {
 func (*ImportDumpRequest) ProtoMessage() {}
 
 func (x *ImportDumpRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[28]
+	mi := &file_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1905,7 +1695,7 @@ func (x *ImportDumpRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportDumpRequest.ProtoReflect.Descriptor instead.
 func (*ImportDumpRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{28}
+	return file_agent_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ImportDumpRequest) GetRepository() *Repository {
@@ -1938,7 +1728,7 @@ type ImportDumpResponse struct {
 
 func (x *ImportDumpResponse) Reset() {
 	*x = ImportDumpResponse{}
-	mi := &file_agent_proto_msgTypes[29]
+	mi := &file_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1950,7 +1740,7 @@ func (x *ImportDumpResponse) String() string {
 func (*ImportDumpResponse) ProtoMessage() {}
 
 func (x *ImportDumpResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[29]
+	mi := &file_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1963,7 +1753,7 @@ func (x *ImportDumpResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportDumpResponse.ProtoReflect.Descriptor instead.
 func (*ImportDumpResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{29}
+	return file_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ImportDumpResponse) GetOutput() string {
@@ -1981,7 +1771,7 @@ type ListVMsRequest struct {
 
 func (x *ListVMsRequest) Reset() {
 	*x = ListVMsRequest{}
-	mi := &file_agent_proto_msgTypes[30]
+	mi := &file_agent_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1993,7 +1783,7 @@ func (x *ListVMsRequest) String() string {
 func (*ListVMsRequest) ProtoMessage() {}
 
 func (x *ListVMsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[30]
+	mi := &file_agent_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2006,7 +1796,7 @@ func (x *ListVMsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVMsRequest.ProtoReflect.Descriptor instead.
 func (*ListVMsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{30}
+	return file_agent_proto_rawDescGZIP(), []int{26}
 }
 
 type VMDisk struct {
@@ -2026,7 +1816,7 @@ type VMDisk struct {
 
 func (x *VMDisk) Reset() {
 	*x = VMDisk{}
-	mi := &file_agent_proto_msgTypes[31]
+	mi := &file_agent_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2038,7 +1828,7 @@ func (x *VMDisk) String() string {
 func (*VMDisk) ProtoMessage() {}
 
 func (x *VMDisk) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[31]
+	mi := &file_agent_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2051,7 +1841,7 @@ func (x *VMDisk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VMDisk.ProtoReflect.Descriptor instead.
 func (*VMDisk) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{31}
+	return file_agent_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *VMDisk) GetTarget() string {
@@ -2129,7 +1919,7 @@ type VM struct {
 
 func (x *VM) Reset() {
 	*x = VM{}
-	mi := &file_agent_proto_msgTypes[32]
+	mi := &file_agent_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2141,7 +1931,7 @@ func (x *VM) String() string {
 func (*VM) ProtoMessage() {}
 
 func (x *VM) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[32]
+	mi := &file_agent_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2154,7 +1944,7 @@ func (x *VM) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VM.ProtoReflect.Descriptor instead.
 func (*VM) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{32}
+	return file_agent_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *VM) GetName() string {
@@ -2194,7 +1984,7 @@ type ListVMsResponse struct {
 
 func (x *ListVMsResponse) Reset() {
 	*x = ListVMsResponse{}
-	mi := &file_agent_proto_msgTypes[33]
+	mi := &file_agent_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2206,7 +1996,7 @@ func (x *ListVMsResponse) String() string {
 func (*ListVMsResponse) ProtoMessage() {}
 
 func (x *ListVMsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[33]
+	mi := &file_agent_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2219,7 +2009,7 @@ func (x *ListVMsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVMsResponse.ProtoReflect.Descriptor instead.
 func (*ListVMsResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{33}
+	return file_agent_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListVMsResponse) GetVms() []*VM {
@@ -2242,7 +2032,7 @@ type VMSpec struct {
 
 func (x *VMSpec) Reset() {
 	*x = VMSpec{}
-	mi := &file_agent_proto_msgTypes[34]
+	mi := &file_agent_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2254,7 +2044,7 @@ func (x *VMSpec) String() string {
 func (*VMSpec) ProtoMessage() {}
 
 func (x *VMSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[34]
+	mi := &file_agent_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2267,7 +2057,7 @@ func (x *VMSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VMSpec.ProtoReflect.Descriptor instead.
 func (*VMSpec) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{34}
+	return file_agent_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *VMSpec) GetName() string {
@@ -2306,7 +2096,7 @@ type RestoreVMRequest struct {
 
 func (x *RestoreVMRequest) Reset() {
 	*x = RestoreVMRequest{}
-	mi := &file_agent_proto_msgTypes[35]
+	mi := &file_agent_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2318,7 +2108,7 @@ func (x *RestoreVMRequest) String() string {
 func (*RestoreVMRequest) ProtoMessage() {}
 
 func (x *RestoreVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[35]
+	mi := &file_agent_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2331,7 +2121,7 @@ func (x *RestoreVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreVMRequest.ProtoReflect.Descriptor instead.
 func (*RestoreVMRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{35}
+	return file_agent_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RestoreVMRequest) GetRepository() *Repository {
@@ -2378,7 +2168,7 @@ type CheckRequest struct {
 
 func (x *CheckRequest) Reset() {
 	*x = CheckRequest{}
-	mi := &file_agent_proto_msgTypes[36]
+	mi := &file_agent_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2390,7 +2180,7 @@ func (x *CheckRequest) String() string {
 func (*CheckRequest) ProtoMessage() {}
 
 func (x *CheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[36]
+	mi := &file_agent_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2403,7 +2193,7 @@ func (x *CheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckRequest.ProtoReflect.Descriptor instead.
 func (*CheckRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{36}
+	return file_agent_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *CheckRequest) GetRepository() *Repository {
@@ -2442,7 +2232,7 @@ type CheckResponse struct {
 
 func (x *CheckResponse) Reset() {
 	*x = CheckResponse{}
-	mi := &file_agent_proto_msgTypes[37]
+	mi := &file_agent_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2454,7 +2244,7 @@ func (x *CheckResponse) String() string {
 func (*CheckResponse) ProtoMessage() {}
 
 func (x *CheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[37]
+	mi := &file_agent_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2467,7 +2257,7 @@ func (x *CheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckResponse.ProtoReflect.Descriptor instead.
 func (*CheckResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{37}
+	return file_agent_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *CheckResponse) GetSnapshots() int32 {
@@ -2531,7 +2321,7 @@ type PathUsageRequest struct {
 
 func (x *PathUsageRequest) Reset() {
 	*x = PathUsageRequest{}
-	mi := &file_agent_proto_msgTypes[38]
+	mi := &file_agent_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2543,7 +2333,7 @@ func (x *PathUsageRequest) String() string {
 func (*PathUsageRequest) ProtoMessage() {}
 
 func (x *PathUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[38]
+	mi := &file_agent_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2556,7 +2346,7 @@ func (x *PathUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathUsageRequest.ProtoReflect.Descriptor instead.
 func (*PathUsageRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{38}
+	return file_agent_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *PathUsageRequest) GetPaths() []string {
@@ -2593,7 +2383,7 @@ type PathUsage struct {
 
 func (x *PathUsage) Reset() {
 	*x = PathUsage{}
-	mi := &file_agent_proto_msgTypes[39]
+	mi := &file_agent_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2605,7 +2395,7 @@ func (x *PathUsage) String() string {
 func (*PathUsage) ProtoMessage() {}
 
 func (x *PathUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[39]
+	mi := &file_agent_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2618,7 +2408,7 @@ func (x *PathUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathUsage.ProtoReflect.Descriptor instead.
 func (*PathUsage) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{39}
+	return file_agent_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *PathUsage) GetPath() string {
@@ -2693,7 +2483,7 @@ type PathUsageResponse struct {
 
 func (x *PathUsageResponse) Reset() {
 	*x = PathUsageResponse{}
-	mi := &file_agent_proto_msgTypes[40]
+	mi := &file_agent_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2705,7 +2495,7 @@ func (x *PathUsageResponse) String() string {
 func (*PathUsageResponse) ProtoMessage() {}
 
 func (x *PathUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[40]
+	mi := &file_agent_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2718,7 +2508,7 @@ func (x *PathUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathUsageResponse.ProtoReflect.Descriptor instead.
 func (*PathUsageResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{40}
+	return file_agent_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *PathUsageResponse) GetUsages() []*PathUsage {
@@ -2737,7 +2527,7 @@ type RepoStatsRequest struct {
 
 func (x *RepoStatsRequest) Reset() {
 	*x = RepoStatsRequest{}
-	mi := &file_agent_proto_msgTypes[41]
+	mi := &file_agent_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2749,7 +2539,7 @@ func (x *RepoStatsRequest) String() string {
 func (*RepoStatsRequest) ProtoMessage() {}
 
 func (x *RepoStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[41]
+	mi := &file_agent_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2762,7 +2552,7 @@ func (x *RepoStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepoStatsRequest.ProtoReflect.Descriptor instead.
 func (*RepoStatsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{41}
+	return file_agent_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *RepoStatsRequest) GetRepository() *Repository {
@@ -2786,7 +2576,7 @@ type RepoStatsResponse struct {
 
 func (x *RepoStatsResponse) Reset() {
 	*x = RepoStatsResponse{}
-	mi := &file_agent_proto_msgTypes[42]
+	mi := &file_agent_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2798,7 +2588,7 @@ func (x *RepoStatsResponse) String() string {
 func (*RepoStatsResponse) ProtoMessage() {}
 
 func (x *RepoStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[42]
+	mi := &file_agent_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2811,7 +2601,7 @@ func (x *RepoStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepoStatsResponse.ProtoReflect.Descriptor instead.
 func (*RepoStatsResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{42}
+	return file_agent_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *RepoStatsResponse) GetStoredBytes() int64 {
@@ -2854,7 +2644,7 @@ type LogsRequest struct {
 
 func (x *LogsRequest) Reset() {
 	*x = LogsRequest{}
-	mi := &file_agent_proto_msgTypes[43]
+	mi := &file_agent_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2866,7 +2656,7 @@ func (x *LogsRequest) String() string {
 func (*LogsRequest) ProtoMessage() {}
 
 func (x *LogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[43]
+	mi := &file_agent_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2879,7 +2669,7 @@ func (x *LogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogsRequest.ProtoReflect.Descriptor instead.
 func (*LogsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{43}
+	return file_agent_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *LogsRequest) GetMinLevel() int32 {
@@ -2910,7 +2700,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_agent_proto_msgTypes[44]
+	mi := &file_agent_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2922,7 +2712,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[44]
+	mi := &file_agent_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2935,7 +2725,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{44}
+	return file_agent_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *LogEntry) GetSeq() uint64 {
@@ -2983,7 +2773,7 @@ type LogsResponse struct {
 
 func (x *LogsResponse) Reset() {
 	*x = LogsResponse{}
-	mi := &file_agent_proto_msgTypes[45]
+	mi := &file_agent_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2995,7 +2785,7 @@ func (x *LogsResponse) String() string {
 func (*LogsResponse) ProtoMessage() {}
 
 func (x *LogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[45]
+	mi := &file_agent_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3008,7 +2798,7 @@ func (x *LogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogsResponse.ProtoReflect.Descriptor instead.
 func (*LogsResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{45}
+	return file_agent_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *LogsResponse) GetEntries() []*LogEntry {
@@ -3128,19 +2918,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x05files\x18\x02 \x01(\x05R\x05files\x12\x12\n" +
 	"\x04dirs\x18\x03 \x01(\x05R\x04dirs\x12\x18\n" +
 	"\askipped\x18\x04 \x01(\x05R\askipped\x12\x1a\n" +
-	"\bwarnings\x18\x05 \x03(\tR\bwarnings\"B\n" +
-	"\rEnrollRequest\x12\x16\n" +
-	"\x06secret\x18\x01 \x01(\fR\x06secret\x12\x19\n" +
-	"\bagent_id\x18\x02 \x01(\tR\aagentId\"_\n" +
-	"\x0eEnrollResponse\x12\x17\n" +
-	"\acsr_der\x18\x01 \x01(\fR\x06csrDer\x12\x1a\n" +
-	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x18\n" +
-	"\aversion\x18\x03 \x01(\tR\aversion\"e\n" +
-	"\x19CompleteEnrollmentRequest\x12\x16\n" +
-	"\x06secret\x18\x01 \x01(\fR\x06secret\x12\x19\n" +
-	"\bcert_der\x18\x02 \x01(\fR\acertDer\x12\x15\n" +
-	"\x06ca_der\x18\x03 \x01(\fR\x05caDer\"\x1c\n" +
-	"\x1aCompleteEnrollmentResponse\"\r\n" +
+	"\bwarnings\x18\x05 \x03(\tR\bwarnings\"\r\n" +
 	"\vPingRequest\"\xc1\x01\n" +
 	"\fPingResponse\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1a\n" +
@@ -3286,10 +3064,8 @@ const file_agent_proto_rawDesc = "" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x14\n" +
 	"\x05attrs\x18\x05 \x01(\tR\x05attrs\"K\n" +
 	"\fLogsResponse\x12;\n" +
-	"\aentries\x18\x01 \x03(\v2!.voidgridbackup.agent.v1.LogEntryR\aentries2\xad\r\n" +
-	"\x05Agent\x12Y\n" +
-	"\x06Enroll\x12&.voidgridbackup.agent.v1.EnrollRequest\x1a'.voidgridbackup.agent.v1.EnrollResponse\x12}\n" +
-	"\x12CompleteEnrollment\x122.voidgridbackup.agent.v1.CompleteEnrollmentRequest\x1a3.voidgridbackup.agent.v1.CompleteEnrollmentResponse\x12S\n" +
+	"\aentries\x18\x01 \x03(\v2!.voidgridbackup.agent.v1.LogEntryR\aentries2\xd3\v\n" +
+	"\x05Agent\x12S\n" +
 	"\x04Ping\x12$.voidgridbackup.agent.v1.PingRequest\x1a%.voidgridbackup.agent.v1.PingResponse\x12q\n" +
 	"\x0eInitRepository\x12..voidgridbackup.agent.v1.InitRepositoryRequest\x1a/.voidgridbackup.agent.v1.InitRepositoryResponse\x12Y\n" +
 	"\x06Backup\x12&.voidgridbackup.agent.v1.BackupRequest\x1a'.voidgridbackup.agent.v1.BackupResponse\x12n\n" +
@@ -3320,117 +3096,109 @@ func file_agent_proto_rawDescGZIP() []byte {
 	return file_agent_proto_rawDescData
 }
 
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_agent_proto_goTypes = []any{
-	(*Repository)(nil),                 // 0: voidgridbackup.agent.v1.Repository
-	(*InitRepositoryRequest)(nil),      // 1: voidgridbackup.agent.v1.InitRepositoryRequest
-	(*InitRepositoryResponse)(nil),     // 2: voidgridbackup.agent.v1.InitRepositoryResponse
-	(*Retention)(nil),                  // 3: voidgridbackup.agent.v1.Retention
-	(*BackupRequest)(nil),              // 4: voidgridbackup.agent.v1.BackupRequest
-	(*PathResult)(nil),                 // 5: voidgridbackup.agent.v1.PathResult
-	(*BackupResponse)(nil),             // 6: voidgridbackup.agent.v1.BackupResponse
-	(*ListSnapshotsRequest)(nil),       // 7: voidgridbackup.agent.v1.ListSnapshotsRequest
-	(*Snapshot)(nil),                   // 8: voidgridbackup.agent.v1.Snapshot
-	(*ListSnapshotsResponse)(nil),      // 9: voidgridbackup.agent.v1.ListSnapshotsResponse
-	(*ListDirectoryRequest)(nil),       // 10: voidgridbackup.agent.v1.ListDirectoryRequest
-	(*DirEntry)(nil),                   // 11: voidgridbackup.agent.v1.DirEntry
-	(*ListDirectoryResponse)(nil),      // 12: voidgridbackup.agent.v1.ListDirectoryResponse
-	(*RestoreRequest)(nil),             // 13: voidgridbackup.agent.v1.RestoreRequest
-	(*RestoreResponse)(nil),            // 14: voidgridbackup.agent.v1.RestoreResponse
-	(*EnrollRequest)(nil),              // 15: voidgridbackup.agent.v1.EnrollRequest
-	(*EnrollResponse)(nil),             // 16: voidgridbackup.agent.v1.EnrollResponse
-	(*CompleteEnrollmentRequest)(nil),  // 17: voidgridbackup.agent.v1.CompleteEnrollmentRequest
-	(*CompleteEnrollmentResponse)(nil), // 18: voidgridbackup.agent.v1.CompleteEnrollmentResponse
-	(*PingRequest)(nil),                // 19: voidgridbackup.agent.v1.PingRequest
-	(*PingResponse)(nil),               // 20: voidgridbackup.agent.v1.PingResponse
-	(*ListStacksRequest)(nil),          // 21: voidgridbackup.agent.v1.ListStacksRequest
-	(*Mount)(nil),                      // 22: voidgridbackup.agent.v1.Mount
-	(*Service)(nil),                    // 23: voidgridbackup.agent.v1.Service
-	(*Stack)(nil),                      // 24: voidgridbackup.agent.v1.Stack
-	(*ListStacksResponse)(nil),         // 25: voidgridbackup.agent.v1.ListStacksResponse
-	(*StackSpec)(nil),                  // 26: voidgridbackup.agent.v1.StackSpec
-	(*RestoreStackRequest)(nil),        // 27: voidgridbackup.agent.v1.RestoreStackRequest
-	(*ImportDumpRequest)(nil),          // 28: voidgridbackup.agent.v1.ImportDumpRequest
-	(*ImportDumpResponse)(nil),         // 29: voidgridbackup.agent.v1.ImportDumpResponse
-	(*ListVMsRequest)(nil),             // 30: voidgridbackup.agent.v1.ListVMsRequest
-	(*VMDisk)(nil),                     // 31: voidgridbackup.agent.v1.VMDisk
-	(*VM)(nil),                         // 32: voidgridbackup.agent.v1.VM
-	(*ListVMsResponse)(nil),            // 33: voidgridbackup.agent.v1.ListVMsResponse
-	(*VMSpec)(nil),                     // 34: voidgridbackup.agent.v1.VMSpec
-	(*RestoreVMRequest)(nil),           // 35: voidgridbackup.agent.v1.RestoreVMRequest
-	(*CheckRequest)(nil),               // 36: voidgridbackup.agent.v1.CheckRequest
-	(*CheckResponse)(nil),              // 37: voidgridbackup.agent.v1.CheckResponse
-	(*PathUsageRequest)(nil),           // 38: voidgridbackup.agent.v1.PathUsageRequest
-	(*PathUsage)(nil),                  // 39: voidgridbackup.agent.v1.PathUsage
-	(*PathUsageResponse)(nil),          // 40: voidgridbackup.agent.v1.PathUsageResponse
-	(*RepoStatsRequest)(nil),           // 41: voidgridbackup.agent.v1.RepoStatsRequest
-	(*RepoStatsResponse)(nil),          // 42: voidgridbackup.agent.v1.RepoStatsResponse
-	(*LogsRequest)(nil),                // 43: voidgridbackup.agent.v1.LogsRequest
-	(*LogEntry)(nil),                   // 44: voidgridbackup.agent.v1.LogEntry
-	(*LogsResponse)(nil),               // 45: voidgridbackup.agent.v1.LogsResponse
-	nil,                                // 46: voidgridbackup.agent.v1.StackSpec.DumpsEntry
+	(*Repository)(nil),             // 0: voidgridbackup.agent.v1.Repository
+	(*InitRepositoryRequest)(nil),  // 1: voidgridbackup.agent.v1.InitRepositoryRequest
+	(*InitRepositoryResponse)(nil), // 2: voidgridbackup.agent.v1.InitRepositoryResponse
+	(*Retention)(nil),              // 3: voidgridbackup.agent.v1.Retention
+	(*BackupRequest)(nil),          // 4: voidgridbackup.agent.v1.BackupRequest
+	(*PathResult)(nil),             // 5: voidgridbackup.agent.v1.PathResult
+	(*BackupResponse)(nil),         // 6: voidgridbackup.agent.v1.BackupResponse
+	(*ListSnapshotsRequest)(nil),   // 7: voidgridbackup.agent.v1.ListSnapshotsRequest
+	(*Snapshot)(nil),               // 8: voidgridbackup.agent.v1.Snapshot
+	(*ListSnapshotsResponse)(nil),  // 9: voidgridbackup.agent.v1.ListSnapshotsResponse
+	(*ListDirectoryRequest)(nil),   // 10: voidgridbackup.agent.v1.ListDirectoryRequest
+	(*DirEntry)(nil),               // 11: voidgridbackup.agent.v1.DirEntry
+	(*ListDirectoryResponse)(nil),  // 12: voidgridbackup.agent.v1.ListDirectoryResponse
+	(*RestoreRequest)(nil),         // 13: voidgridbackup.agent.v1.RestoreRequest
+	(*RestoreResponse)(nil),        // 14: voidgridbackup.agent.v1.RestoreResponse
+	(*PingRequest)(nil),            // 15: voidgridbackup.agent.v1.PingRequest
+	(*PingResponse)(nil),           // 16: voidgridbackup.agent.v1.PingResponse
+	(*ListStacksRequest)(nil),      // 17: voidgridbackup.agent.v1.ListStacksRequest
+	(*Mount)(nil),                  // 18: voidgridbackup.agent.v1.Mount
+	(*Service)(nil),                // 19: voidgridbackup.agent.v1.Service
+	(*Stack)(nil),                  // 20: voidgridbackup.agent.v1.Stack
+	(*ListStacksResponse)(nil),     // 21: voidgridbackup.agent.v1.ListStacksResponse
+	(*StackSpec)(nil),              // 22: voidgridbackup.agent.v1.StackSpec
+	(*RestoreStackRequest)(nil),    // 23: voidgridbackup.agent.v1.RestoreStackRequest
+	(*ImportDumpRequest)(nil),      // 24: voidgridbackup.agent.v1.ImportDumpRequest
+	(*ImportDumpResponse)(nil),     // 25: voidgridbackup.agent.v1.ImportDumpResponse
+	(*ListVMsRequest)(nil),         // 26: voidgridbackup.agent.v1.ListVMsRequest
+	(*VMDisk)(nil),                 // 27: voidgridbackup.agent.v1.VMDisk
+	(*VM)(nil),                     // 28: voidgridbackup.agent.v1.VM
+	(*ListVMsResponse)(nil),        // 29: voidgridbackup.agent.v1.ListVMsResponse
+	(*VMSpec)(nil),                 // 30: voidgridbackup.agent.v1.VMSpec
+	(*RestoreVMRequest)(nil),       // 31: voidgridbackup.agent.v1.RestoreVMRequest
+	(*CheckRequest)(nil),           // 32: voidgridbackup.agent.v1.CheckRequest
+	(*CheckResponse)(nil),          // 33: voidgridbackup.agent.v1.CheckResponse
+	(*PathUsageRequest)(nil),       // 34: voidgridbackup.agent.v1.PathUsageRequest
+	(*PathUsage)(nil),              // 35: voidgridbackup.agent.v1.PathUsage
+	(*PathUsageResponse)(nil),      // 36: voidgridbackup.agent.v1.PathUsageResponse
+	(*RepoStatsRequest)(nil),       // 37: voidgridbackup.agent.v1.RepoStatsRequest
+	(*RepoStatsResponse)(nil),      // 38: voidgridbackup.agent.v1.RepoStatsResponse
+	(*LogsRequest)(nil),            // 39: voidgridbackup.agent.v1.LogsRequest
+	(*LogEntry)(nil),               // 40: voidgridbackup.agent.v1.LogEntry
+	(*LogsResponse)(nil),           // 41: voidgridbackup.agent.v1.LogsResponse
+	nil,                            // 42: voidgridbackup.agent.v1.StackSpec.DumpsEntry
 }
 var file_agent_proto_depIdxs = []int32{
 	0,  // 0: voidgridbackup.agent.v1.InitRepositoryRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
 	0,  // 1: voidgridbackup.agent.v1.BackupRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
 	3,  // 2: voidgridbackup.agent.v1.BackupRequest.retention:type_name -> voidgridbackup.agent.v1.Retention
-	26, // 3: voidgridbackup.agent.v1.BackupRequest.stack:type_name -> voidgridbackup.agent.v1.StackSpec
-	34, // 4: voidgridbackup.agent.v1.BackupRequest.vm:type_name -> voidgridbackup.agent.v1.VMSpec
+	22, // 3: voidgridbackup.agent.v1.BackupRequest.stack:type_name -> voidgridbackup.agent.v1.StackSpec
+	30, // 4: voidgridbackup.agent.v1.BackupRequest.vm:type_name -> voidgridbackup.agent.v1.VMSpec
 	5,  // 5: voidgridbackup.agent.v1.BackupResponse.results:type_name -> voidgridbackup.agent.v1.PathResult
 	0,  // 6: voidgridbackup.agent.v1.ListSnapshotsRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
 	8,  // 7: voidgridbackup.agent.v1.ListSnapshotsResponse.snapshots:type_name -> voidgridbackup.agent.v1.Snapshot
 	0,  // 8: voidgridbackup.agent.v1.ListDirectoryRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
 	11, // 9: voidgridbackup.agent.v1.ListDirectoryResponse.entries:type_name -> voidgridbackup.agent.v1.DirEntry
 	0,  // 10: voidgridbackup.agent.v1.RestoreRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
-	22, // 11: voidgridbackup.agent.v1.Service.mounts:type_name -> voidgridbackup.agent.v1.Mount
-	23, // 12: voidgridbackup.agent.v1.Stack.services:type_name -> voidgridbackup.agent.v1.Service
-	24, // 13: voidgridbackup.agent.v1.ListStacksResponse.stacks:type_name -> voidgridbackup.agent.v1.Stack
-	46, // 14: voidgridbackup.agent.v1.StackSpec.dumps:type_name -> voidgridbackup.agent.v1.StackSpec.DumpsEntry
+	18, // 11: voidgridbackup.agent.v1.Service.mounts:type_name -> voidgridbackup.agent.v1.Mount
+	19, // 12: voidgridbackup.agent.v1.Stack.services:type_name -> voidgridbackup.agent.v1.Service
+	20, // 13: voidgridbackup.agent.v1.ListStacksResponse.stacks:type_name -> voidgridbackup.agent.v1.Stack
+	42, // 14: voidgridbackup.agent.v1.StackSpec.dumps:type_name -> voidgridbackup.agent.v1.StackSpec.DumpsEntry
 	0,  // 15: voidgridbackup.agent.v1.RestoreStackRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
 	0,  // 16: voidgridbackup.agent.v1.ImportDumpRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
-	31, // 17: voidgridbackup.agent.v1.VM.disks:type_name -> voidgridbackup.agent.v1.VMDisk
-	32, // 18: voidgridbackup.agent.v1.ListVMsResponse.vms:type_name -> voidgridbackup.agent.v1.VM
+	27, // 17: voidgridbackup.agent.v1.VM.disks:type_name -> voidgridbackup.agent.v1.VMDisk
+	28, // 18: voidgridbackup.agent.v1.ListVMsResponse.vms:type_name -> voidgridbackup.agent.v1.VM
 	0,  // 19: voidgridbackup.agent.v1.RestoreVMRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
 	0,  // 20: voidgridbackup.agent.v1.CheckRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
-	39, // 21: voidgridbackup.agent.v1.PathUsageResponse.usages:type_name -> voidgridbackup.agent.v1.PathUsage
+	35, // 21: voidgridbackup.agent.v1.PathUsageResponse.usages:type_name -> voidgridbackup.agent.v1.PathUsage
 	0,  // 22: voidgridbackup.agent.v1.RepoStatsRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
-	44, // 23: voidgridbackup.agent.v1.LogsResponse.entries:type_name -> voidgridbackup.agent.v1.LogEntry
-	15, // 24: voidgridbackup.agent.v1.Agent.Enroll:input_type -> voidgridbackup.agent.v1.EnrollRequest
-	17, // 25: voidgridbackup.agent.v1.Agent.CompleteEnrollment:input_type -> voidgridbackup.agent.v1.CompleteEnrollmentRequest
-	19, // 26: voidgridbackup.agent.v1.Agent.Ping:input_type -> voidgridbackup.agent.v1.PingRequest
-	1,  // 27: voidgridbackup.agent.v1.Agent.InitRepository:input_type -> voidgridbackup.agent.v1.InitRepositoryRequest
-	4,  // 28: voidgridbackup.agent.v1.Agent.Backup:input_type -> voidgridbackup.agent.v1.BackupRequest
-	7,  // 29: voidgridbackup.agent.v1.Agent.ListSnapshots:input_type -> voidgridbackup.agent.v1.ListSnapshotsRequest
-	10, // 30: voidgridbackup.agent.v1.Agent.ListDirectory:input_type -> voidgridbackup.agent.v1.ListDirectoryRequest
-	13, // 31: voidgridbackup.agent.v1.Agent.Restore:input_type -> voidgridbackup.agent.v1.RestoreRequest
-	21, // 32: voidgridbackup.agent.v1.Agent.ListStacks:input_type -> voidgridbackup.agent.v1.ListStacksRequest
-	27, // 33: voidgridbackup.agent.v1.Agent.RestoreStack:input_type -> voidgridbackup.agent.v1.RestoreStackRequest
-	28, // 34: voidgridbackup.agent.v1.Agent.ImportDump:input_type -> voidgridbackup.agent.v1.ImportDumpRequest
-	30, // 35: voidgridbackup.agent.v1.Agent.ListVMs:input_type -> voidgridbackup.agent.v1.ListVMsRequest
-	35, // 36: voidgridbackup.agent.v1.Agent.RestoreVM:input_type -> voidgridbackup.agent.v1.RestoreVMRequest
-	36, // 37: voidgridbackup.agent.v1.Agent.Check:input_type -> voidgridbackup.agent.v1.CheckRequest
-	38, // 38: voidgridbackup.agent.v1.Agent.PathUsage:input_type -> voidgridbackup.agent.v1.PathUsageRequest
-	41, // 39: voidgridbackup.agent.v1.Agent.RepoStats:input_type -> voidgridbackup.agent.v1.RepoStatsRequest
-	43, // 40: voidgridbackup.agent.v1.Agent.Logs:input_type -> voidgridbackup.agent.v1.LogsRequest
-	16, // 41: voidgridbackup.agent.v1.Agent.Enroll:output_type -> voidgridbackup.agent.v1.EnrollResponse
-	18, // 42: voidgridbackup.agent.v1.Agent.CompleteEnrollment:output_type -> voidgridbackup.agent.v1.CompleteEnrollmentResponse
-	20, // 43: voidgridbackup.agent.v1.Agent.Ping:output_type -> voidgridbackup.agent.v1.PingResponse
-	2,  // 44: voidgridbackup.agent.v1.Agent.InitRepository:output_type -> voidgridbackup.agent.v1.InitRepositoryResponse
-	6,  // 45: voidgridbackup.agent.v1.Agent.Backup:output_type -> voidgridbackup.agent.v1.BackupResponse
-	9,  // 46: voidgridbackup.agent.v1.Agent.ListSnapshots:output_type -> voidgridbackup.agent.v1.ListSnapshotsResponse
-	12, // 47: voidgridbackup.agent.v1.Agent.ListDirectory:output_type -> voidgridbackup.agent.v1.ListDirectoryResponse
-	14, // 48: voidgridbackup.agent.v1.Agent.Restore:output_type -> voidgridbackup.agent.v1.RestoreResponse
-	25, // 49: voidgridbackup.agent.v1.Agent.ListStacks:output_type -> voidgridbackup.agent.v1.ListStacksResponse
-	14, // 50: voidgridbackup.agent.v1.Agent.RestoreStack:output_type -> voidgridbackup.agent.v1.RestoreResponse
-	29, // 51: voidgridbackup.agent.v1.Agent.ImportDump:output_type -> voidgridbackup.agent.v1.ImportDumpResponse
-	33, // 52: voidgridbackup.agent.v1.Agent.ListVMs:output_type -> voidgridbackup.agent.v1.ListVMsResponse
-	14, // 53: voidgridbackup.agent.v1.Agent.RestoreVM:output_type -> voidgridbackup.agent.v1.RestoreResponse
-	37, // 54: voidgridbackup.agent.v1.Agent.Check:output_type -> voidgridbackup.agent.v1.CheckResponse
-	40, // 55: voidgridbackup.agent.v1.Agent.PathUsage:output_type -> voidgridbackup.agent.v1.PathUsageResponse
-	42, // 56: voidgridbackup.agent.v1.Agent.RepoStats:output_type -> voidgridbackup.agent.v1.RepoStatsResponse
-	45, // 57: voidgridbackup.agent.v1.Agent.Logs:output_type -> voidgridbackup.agent.v1.LogsResponse
-	41, // [41:58] is the sub-list for method output_type
-	24, // [24:41] is the sub-list for method input_type
+	40, // 23: voidgridbackup.agent.v1.LogsResponse.entries:type_name -> voidgridbackup.agent.v1.LogEntry
+	15, // 24: voidgridbackup.agent.v1.Agent.Ping:input_type -> voidgridbackup.agent.v1.PingRequest
+	1,  // 25: voidgridbackup.agent.v1.Agent.InitRepository:input_type -> voidgridbackup.agent.v1.InitRepositoryRequest
+	4,  // 26: voidgridbackup.agent.v1.Agent.Backup:input_type -> voidgridbackup.agent.v1.BackupRequest
+	7,  // 27: voidgridbackup.agent.v1.Agent.ListSnapshots:input_type -> voidgridbackup.agent.v1.ListSnapshotsRequest
+	10, // 28: voidgridbackup.agent.v1.Agent.ListDirectory:input_type -> voidgridbackup.agent.v1.ListDirectoryRequest
+	13, // 29: voidgridbackup.agent.v1.Agent.Restore:input_type -> voidgridbackup.agent.v1.RestoreRequest
+	17, // 30: voidgridbackup.agent.v1.Agent.ListStacks:input_type -> voidgridbackup.agent.v1.ListStacksRequest
+	23, // 31: voidgridbackup.agent.v1.Agent.RestoreStack:input_type -> voidgridbackup.agent.v1.RestoreStackRequest
+	24, // 32: voidgridbackup.agent.v1.Agent.ImportDump:input_type -> voidgridbackup.agent.v1.ImportDumpRequest
+	26, // 33: voidgridbackup.agent.v1.Agent.ListVMs:input_type -> voidgridbackup.agent.v1.ListVMsRequest
+	31, // 34: voidgridbackup.agent.v1.Agent.RestoreVM:input_type -> voidgridbackup.agent.v1.RestoreVMRequest
+	32, // 35: voidgridbackup.agent.v1.Agent.Check:input_type -> voidgridbackup.agent.v1.CheckRequest
+	34, // 36: voidgridbackup.agent.v1.Agent.PathUsage:input_type -> voidgridbackup.agent.v1.PathUsageRequest
+	37, // 37: voidgridbackup.agent.v1.Agent.RepoStats:input_type -> voidgridbackup.agent.v1.RepoStatsRequest
+	39, // 38: voidgridbackup.agent.v1.Agent.Logs:input_type -> voidgridbackup.agent.v1.LogsRequest
+	16, // 39: voidgridbackup.agent.v1.Agent.Ping:output_type -> voidgridbackup.agent.v1.PingResponse
+	2,  // 40: voidgridbackup.agent.v1.Agent.InitRepository:output_type -> voidgridbackup.agent.v1.InitRepositoryResponse
+	6,  // 41: voidgridbackup.agent.v1.Agent.Backup:output_type -> voidgridbackup.agent.v1.BackupResponse
+	9,  // 42: voidgridbackup.agent.v1.Agent.ListSnapshots:output_type -> voidgridbackup.agent.v1.ListSnapshotsResponse
+	12, // 43: voidgridbackup.agent.v1.Agent.ListDirectory:output_type -> voidgridbackup.agent.v1.ListDirectoryResponse
+	14, // 44: voidgridbackup.agent.v1.Agent.Restore:output_type -> voidgridbackup.agent.v1.RestoreResponse
+	21, // 45: voidgridbackup.agent.v1.Agent.ListStacks:output_type -> voidgridbackup.agent.v1.ListStacksResponse
+	14, // 46: voidgridbackup.agent.v1.Agent.RestoreStack:output_type -> voidgridbackup.agent.v1.RestoreResponse
+	25, // 47: voidgridbackup.agent.v1.Agent.ImportDump:output_type -> voidgridbackup.agent.v1.ImportDumpResponse
+	29, // 48: voidgridbackup.agent.v1.Agent.ListVMs:output_type -> voidgridbackup.agent.v1.ListVMsResponse
+	14, // 49: voidgridbackup.agent.v1.Agent.RestoreVM:output_type -> voidgridbackup.agent.v1.RestoreResponse
+	33, // 50: voidgridbackup.agent.v1.Agent.Check:output_type -> voidgridbackup.agent.v1.CheckResponse
+	36, // 51: voidgridbackup.agent.v1.Agent.PathUsage:output_type -> voidgridbackup.agent.v1.PathUsageResponse
+	38, // 52: voidgridbackup.agent.v1.Agent.RepoStats:output_type -> voidgridbackup.agent.v1.RepoStatsResponse
+	41, // 53: voidgridbackup.agent.v1.Agent.Logs:output_type -> voidgridbackup.agent.v1.LogsResponse
+	39, // [39:54] is the sub-list for method output_type
+	24, // [24:39] is the sub-list for method input_type
 	24, // [24:24] is the sub-list for extension type_name
 	24, // [24:24] is the sub-list for extension extendee
 	0,  // [0:24] is the sub-list for field type_name
@@ -3447,7 +3215,7 @@ func file_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   47,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

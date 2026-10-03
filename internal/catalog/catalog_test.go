@@ -88,3 +88,95 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("after update: %q %v", v, err)
 	}
 }
+
+func TestRegistrations(t *testing.T) {
+	ctx := context.Background()
+	c, err := Open(filepath.Join(t.TempDir(), "catalog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	now := time.Now()
+	r, err := c.RegisterAgent(ctx, Registration{ID: "r1", Fingerprint: "f1", AgentCert: []byte("cert"),
+		Hostname: "box", Address: "10.0.0.5:9443", Version: "v1", CreatedAt: now})
+	if err != nil || r.Status != RegPending || r.ID != "r1" || r.LastPoll.IsZero() {
+		t.Fatalf("register: %+v %v", r, err)
+	}
+	// The same agent registering again keeps its ID and status, refreshes details.
+	r, err = c.RegisterAgent(ctx, Registration{ID: "other", Fingerprint: "f1", AgentCert: []byte("cert"),
+		Hostname: "box2", Address: "10.0.0.6:9443", Version: "v2", CreatedAt: now})
+	if err != nil || r.ID != "r1" || r.Hostname != "box2" || r.Address != "10.0.0.6:9443" || r.Version != "v2" {
+		t.Fatalf("re-register: %+v %v", r, err)
+	}
+	if _, err := c.RegisterAgent(ctx, Registration{ID: "r2", Fingerprint: "f2", AgentCert: []byte("c2"),
+		Address: "10.0.0.7:9443", CreatedAt: now.Add(time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	if list, err := c.ListRegistrations(ctx); err != nil || len(list) != 2 || list[0].ID != "r1" {
+		t.Fatalf("list: %+v %v", list, err)
+	}
+
+	if err := c.ApproveRegistration(ctx, "r1", "a1", []byte("issued")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.ApproveRegistration(ctx, "r1", "a1", []byte("issued")); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("approving twice: %v", err)
+	}
+	if got, err := c.RegistrationByFingerprint(ctx, "f1"); err != nil || got.Status != RegApproved || got.AgentID != "a1" || string(got.IssuedCert) != "issued" {
+		t.Fatalf("approved: %+v %v", got, err)
+	}
+	if err := c.RejectRegistration(ctx, "r2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RejectRegistration(ctx, "r1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("rejecting an approved registration: %v", err)
+	}
+	if list, _ := c.ListRegistrations(ctx); len(list) != 1 || list[0].Status != RegRejected {
+		t.Fatalf("approved rows should not be listed: %+v", list)
+	}
+
+	if err := c.DeleteUndecidedRegistrations(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RegistrationByID(ctx, "r2"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("rejected row should be gone: %v", err)
+	}
+	if _, err := c.RegistrationByID(ctx, "r1"); err != nil {
+		t.Fatalf("approved row must survive: %v", err)
+	}
+	if err := c.DeleteApprovedRegistrations(ctx, "a1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RegistrationByID(ctx, "r1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("approved row should be gone: %v", err)
+	}
+}
+
+func TestRenameAndReplaceAgent(t *testing.T) {
+	ctx := context.Background()
+	c, err := Open(filepath.Join(t.TempDir(), "catalog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if err := c.AddAgent(ctx, Agent{ID: "a1", Name: "box", Address: "10.0.0.5:9443", CertFingerprint: "old", EnrolledAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RenameAgent(ctx, "a1", "renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RenameAgent(ctx, "missing", "x"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("rename missing: %v", err)
+	}
+	if err := c.RecordFailure(ctx, "a1", "boom"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.ReplaceAgent(ctx, "a1", "10.0.0.9:9500", "newhost", "v2", "new"); err != nil {
+		t.Fatal(err)
+	}
+	a, err := c.Agent(ctx, "a1")
+	if err != nil || a.ID != "a1" || a.Name != "renamed" || a.Address != "10.0.0.9:9500" || a.CertFingerprint != "new" || a.LastError != "" || a.Hostname != "newhost" {
+		t.Fatalf("after replace: %+v %v", a, err)
+	}
+}

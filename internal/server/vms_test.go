@@ -30,7 +30,7 @@ func TestVMJobEndToEnd(t *testing.T) {
 	a, addr := startAgent(t, t.TempDir())
 	a.SetHypervisor(hv)
 	c := newController(t)
-	ag, err := c.Enroll(ctx, "host", addr, a.EnrollmentCode())
+	ag, err := enrollTestAgent(t, c, a, "host", addr)
 	if err != nil {
 		t.Fatal(err)
 	}

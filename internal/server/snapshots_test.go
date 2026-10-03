@@ -27,7 +27,7 @@ import (
 // startStoppableAgent is startAgent with a way to take the agent down.
 func startStoppableAgent(t *testing.T, dir string) (*agent.Agent, string, func()) {
 	t.Helper()
-	a, err := agent.New(dir, "test-host", "")
+	a, err := agent.New(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestSnapshotIndex(t *testing.T) {
 	ctx := context.Background()
 	a, addr, stop := startStoppableAgent(t, t.TempDir())
 	c := newController(t)
-	ag, err := c.Enroll(ctx, "box", addr, a.EnrollmentCode())
+	ag, err := enrollTestAgent(t, c, a, "box", addr)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -41,7 +41,7 @@
 
   <h2>Add a repository</h2>
   <p class="hint">The chosen agent creates the repository (or connects to one already at that location) and becomes its maintenance owner. Only the fields for the selected kind are used.</p>
-  {{if not .Agents}}<div class="card"><div class="empty">Enroll an agent first.</div></div>{{else}}
+  {{if not .Agents}}<div class="card"><div class="empty">Register and approve an agent first.</div></div>{{else}}
   <div class="card">
     <form class="grid" method="post" action="/repositories">
       <label>Name <input name="name" value="{{.Form.Get "name"}}" required></label>

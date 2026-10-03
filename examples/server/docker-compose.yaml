@@ -11,12 +11,15 @@ services:
     env_file: .env
     environment:
       VB_LISTEN: ":8080"
+      VB_AGENT_LISTEN: ":${VB_AGENT_PORT:-9442}"
       VB_DATA: /data
     ports:
       - "${VB_PORT}:8080"
+      # Agents register here (TLS, not the web UI port). One value sets both sides.
+      - "${VB_AGENT_PORT:-9442}:${VB_AGENT_PORT:-9442}"
     volumes:
       # Catalog (catalog.db) and the CA that agents trust (pki/). Losing pki/
-      # means re-enrolling every agent; back this directory up.
+      # means registering every agent again; back this directory up.
       - ./data:/data
     healthcheck:
       test: ["CMD", "/usr/local/bin/voidgrid-backup-server", "healthcheck"]

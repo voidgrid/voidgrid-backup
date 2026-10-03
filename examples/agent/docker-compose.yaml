@@ -13,14 +13,14 @@ services:
     user: "0:0"
     env_file: .env
     environment:
-      VB_LISTEN: ":9443"
+      VB_LISTEN: ":${VB_PORT:-9443}"
       VB_HEALTH_LISTEN: "127.0.0.1:9444"
       VB_DATA: /data
       VB_DOCKER_SOCKET: /var/run/docker.sock
       VB_LIBVIRT_SOCKET: /var/run/libvirt/libvirt-sock
       VB_LIBVIRT_URI: qemu:///system
     ports:
-      - "${VB_PORT}:9443"
+      - "${VB_PORT:-9443}:${VB_PORT:-9443}"
     cap_drop: [ALL]
     cap_add:
       - DAC_READ_SEARCH  # read files it doesn't own
@@ -33,7 +33,7 @@ services:
       - label=disable    # SELinux hosts: read other containers' mounts without relabelling them
     volumes:
       # Agent identity (key, certificates) and Kopia cache. Keep it: losing it
-      # means re-enrolling the agent.
+      # means registering the agent again.
       - ./data:/data
       - ${DOCKER_SOCKET}:/var/run/docker.sock
       - ${LIBVIRT_SOCKET}:/var/run/libvirt/libvirt-sock

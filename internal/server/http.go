@@ -53,7 +53,11 @@ func NewHandler(c *Controller) http.Handler {
 		fmt.Fprintln(w, "ok")
 	})
 	mux.HandleFunc("GET /{$}", u.agents)
-	mux.HandleFunc("POST /agents", u.enroll)
+	mux.HandleFunc("POST /agents/registrations/{id}/approve", u.approveRegistration)
+	mux.HandleFunc("POST /agents/registrations/{id}/reject", u.rejectRegistration)
+	mux.HandleFunc("POST /agents/registrations/{id}/forget", u.forgetRegistration)
+	mux.HandleFunc("POST /agents/token/rotate", u.rotateToken)
+	mux.HandleFunc("POST /agents/{id}/rename", u.renameAgent)
 	mux.HandleFunc("GET /repositories", u.repositories)
 	mux.HandleFunc("POST /repositories", u.addRepository)
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
@@ -152,8 +156,9 @@ func redirectNotice(w http.ResponseWriter, r *http.Request, to, notice string) {
 
 type agentsPage struct {
 	base
-	Agents        []catalog.Agent
-	Name, Address string
+	Agents  []catalog.Agent
+	Pending []catalog.Registration
+	Token   string
 }
 
 func (u *ui) agents(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +166,14 @@ func (u *ui) agents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (u *ui) renderAgents(w http.ResponseWriter, r *http.Request, code int, p agentsPage) {
-	agents, err := u.c.Catalog.ListAgents(r.Context())
+	ctx := r.Context()
+	agents, err := u.c.Catalog.ListAgents(ctx)
+	if err == nil {
+		p.Pending, err = u.c.Catalog.ListRegistrations(ctx)
+	}
+	if err == nil {
+		p.Token, err = u.c.RegistrationToken(ctx)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -170,18 +182,57 @@ func (u *ui) renderAgents(w http.ResponseWriter, r *http.Request, code int, p ag
 	u.render(w, code, "agents", p)
 }
 
-func (u *ui) enroll(w http.ResponseWriter, r *http.Request) {
-	name, address, code := r.FormValue("name"), r.FormValue("address"), r.FormValue("code")
+// agentsFailed re-renders the Agents page with err shown.
+func (u *ui) agentsFailed(w http.ResponseWriter, r *http.Request, err error) {
+	p := agentsPage{base: u.newBase("Agents", "agents", r)}
+	if errors.Is(err, catalog.ErrNotFound) {
+		err = errors.New("not found (it may have been decided or removed already)")
+	}
+	p.Error = err.Error()
+	u.renderAgents(w, r, http.StatusBadRequest, p)
+}
+
+func (u *ui) approveRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if _, err := u.c.Enroll(ctx, name, address, code); err != nil {
-		// The code is deliberately not echoed back into the form.
-		p := agentsPage{base: u.newBase("Agents", "agents", r), Name: name, Address: address}
-		p.Error = err.Error()
-		u.renderAgents(w, r, http.StatusBadRequest, p)
+	ag, err := u.c.ApproveRegistration(ctx, r.PathValue("id"), r.FormValue("name"), r.FormValue("address"), r.FormValue("replace"))
+	if err != nil {
+		u.agentsFailed(w, r, err)
 		return
 	}
-	redirectNotice(w, r, "/", "Enrolled "+name+".")
+	redirectNotice(w, r, "/", "Approved "+ag.Name+". The agent collects its certificate within a few seconds.")
+}
+
+func (u *ui) rejectRegistration(w http.ResponseWriter, r *http.Request) {
+	if err := u.c.RejectRegistration(r.Context(), r.PathValue("id")); err != nil {
+		u.agentsFailed(w, r, err)
+		return
+	}
+	redirectNotice(w, r, "/", "Rejected.")
+}
+
+func (u *ui) forgetRegistration(w http.ResponseWriter, r *http.Request) {
+	if err := u.c.ForgetRegistration(r.Context(), r.PathValue("id")); err != nil {
+		u.agentsFailed(w, r, err)
+		return
+	}
+	redirectNotice(w, r, "/", "Forgotten. The agent can register again.")
+}
+
+func (u *ui) rotateToken(w http.ResponseWriter, r *http.Request) {
+	if _, err := u.c.RotateRegistrationToken(r.Context()); err != nil {
+		u.agentsFailed(w, r, err)
+		return
+	}
+	redirectNotice(w, r, "/", "Token rotated. Update VB_TOKEN on agents that have not registered yet.")
+}
+
+func (u *ui) renameAgent(w http.ResponseWriter, r *http.Request) {
+	if err := u.c.RenameAgent(r.Context(), r.PathValue("id"), r.FormValue("name")); err != nil {
+		u.agentsFailed(w, r, err)
+		return
+	}
+	redirectNotice(w, r, "/", "Renamed.")
 }
 
 // Repositories

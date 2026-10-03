@@ -19,23 +19,21 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Agent_Enroll_FullMethodName             = "/voidgridbackup.agent.v1.Agent/Enroll"
-	Agent_CompleteEnrollment_FullMethodName = "/voidgridbackup.agent.v1.Agent/CompleteEnrollment"
-	Agent_Ping_FullMethodName               = "/voidgridbackup.agent.v1.Agent/Ping"
-	Agent_InitRepository_FullMethodName     = "/voidgridbackup.agent.v1.Agent/InitRepository"
-	Agent_Backup_FullMethodName             = "/voidgridbackup.agent.v1.Agent/Backup"
-	Agent_ListSnapshots_FullMethodName      = "/voidgridbackup.agent.v1.Agent/ListSnapshots"
-	Agent_ListDirectory_FullMethodName      = "/voidgridbackup.agent.v1.Agent/ListDirectory"
-	Agent_Restore_FullMethodName            = "/voidgridbackup.agent.v1.Agent/Restore"
-	Agent_ListStacks_FullMethodName         = "/voidgridbackup.agent.v1.Agent/ListStacks"
-	Agent_RestoreStack_FullMethodName       = "/voidgridbackup.agent.v1.Agent/RestoreStack"
-	Agent_ImportDump_FullMethodName         = "/voidgridbackup.agent.v1.Agent/ImportDump"
-	Agent_ListVMs_FullMethodName            = "/voidgridbackup.agent.v1.Agent/ListVMs"
-	Agent_RestoreVM_FullMethodName          = "/voidgridbackup.agent.v1.Agent/RestoreVM"
-	Agent_Check_FullMethodName              = "/voidgridbackup.agent.v1.Agent/Check"
-	Agent_PathUsage_FullMethodName          = "/voidgridbackup.agent.v1.Agent/PathUsage"
-	Agent_RepoStats_FullMethodName          = "/voidgridbackup.agent.v1.Agent/RepoStats"
-	Agent_Logs_FullMethodName               = "/voidgridbackup.agent.v1.Agent/Logs"
+	Agent_Ping_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Ping"
+	Agent_InitRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/InitRepository"
+	Agent_Backup_FullMethodName         = "/voidgridbackup.agent.v1.Agent/Backup"
+	Agent_ListSnapshots_FullMethodName  = "/voidgridbackup.agent.v1.Agent/ListSnapshots"
+	Agent_ListDirectory_FullMethodName  = "/voidgridbackup.agent.v1.Agent/ListDirectory"
+	Agent_Restore_FullMethodName        = "/voidgridbackup.agent.v1.Agent/Restore"
+	Agent_ListStacks_FullMethodName     = "/voidgridbackup.agent.v1.Agent/ListStacks"
+	Agent_RestoreStack_FullMethodName   = "/voidgridbackup.agent.v1.Agent/RestoreStack"
+	Agent_ImportDump_FullMethodName     = "/voidgridbackup.agent.v1.Agent/ImportDump"
+	Agent_ListVMs_FullMethodName        = "/voidgridbackup.agent.v1.Agent/ListVMs"
+	Agent_RestoreVM_FullMethodName      = "/voidgridbackup.agent.v1.Agent/RestoreVM"
+	Agent_Check_FullMethodName          = "/voidgridbackup.agent.v1.Agent/Check"
+	Agent_PathUsage_FullMethodName      = "/voidgridbackup.agent.v1.Agent/PathUsage"
+	Agent_RepoStats_FullMethodName      = "/voidgridbackup.agent.v1.Agent/RepoStats"
+	Agent_Logs_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Logs"
 )
 
 // AgentClient is the client API for Agent service.
@@ -44,17 +42,10 @@ const (
 //
 // Agent is served by every voidgrid-backup-agent. The server dials agents.
 //
-// Enrollment (unenrolled agent, TLS with the agent's self-signed bootstrap
-// cert, no client cert): the operator copies the enrollment code from the
-// agent's log into the server UI. The code carries a one-time secret and a pin
-// of the agent's bootstrap cert, so the server knows it reached that agent and
-// the agent only accepts a server that was given the code.
-//
-// After CompleteEnrollment the agent requires a client cert signed by the
-// server's CA, and refuses the enrollment RPCs.
+// An agent gets its certificate by registering with the server (see
+// registry.proto); until an operator approves it, it refuses every RPC. After
+// that it requires a client cert signed by the server's CA.
 type AgentClient interface {
-	Enroll(ctx context.Context, in *EnrollRequest, opts ...grpc.CallOption) (*EnrollResponse, error)
-	CompleteEnrollment(ctx context.Context, in *CompleteEnrollmentRequest, opts ...grpc.CallOption) (*CompleteEnrollmentResponse, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	// Backup repository operations. The server sends the repository config and
 	// password with every call; the agent keeps only a local Kopia cache.
@@ -88,26 +79,6 @@ type agentClient struct {
 
 func NewAgentClient(cc grpc.ClientConnInterface) AgentClient {
 	return &agentClient{cc}
-}
-
-func (c *agentClient) Enroll(ctx context.Context, in *EnrollRequest, opts ...grpc.CallOption) (*EnrollResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EnrollResponse)
-	err := c.cc.Invoke(ctx, Agent_Enroll_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *agentClient) CompleteEnrollment(ctx context.Context, in *CompleteEnrollmentRequest, opts ...grpc.CallOption) (*CompleteEnrollmentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteEnrollmentResponse)
-	err := c.cc.Invoke(ctx, Agent_CompleteEnrollment_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *agentClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
@@ -266,17 +237,10 @@ func (c *agentClient) Logs(ctx context.Context, in *LogsRequest, opts ...grpc.Ca
 //
 // Agent is served by every voidgrid-backup-agent. The server dials agents.
 //
-// Enrollment (unenrolled agent, TLS with the agent's self-signed bootstrap
-// cert, no client cert): the operator copies the enrollment code from the
-// agent's log into the server UI. The code carries a one-time secret and a pin
-// of the agent's bootstrap cert, so the server knows it reached that agent and
-// the agent only accepts a server that was given the code.
-//
-// After CompleteEnrollment the agent requires a client cert signed by the
-// server's CA, and refuses the enrollment RPCs.
+// An agent gets its certificate by registering with the server (see
+// registry.proto); until an operator approves it, it refuses every RPC. After
+// that it requires a client cert signed by the server's CA.
 type AgentServer interface {
-	Enroll(context.Context, *EnrollRequest) (*EnrollResponse, error)
-	CompleteEnrollment(context.Context, *CompleteEnrollmentRequest) (*CompleteEnrollmentResponse, error)
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	// Backup repository operations. The server sends the repository config and
 	// password with every call; the agent keeps only a local Kopia cache.
@@ -312,12 +276,6 @@ type AgentServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAgentServer struct{}
 
-func (UnimplementedAgentServer) Enroll(context.Context, *EnrollRequest) (*EnrollResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Enroll not implemented")
-}
-func (UnimplementedAgentServer) CompleteEnrollment(context.Context, *CompleteEnrollmentRequest) (*CompleteEnrollmentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CompleteEnrollment not implemented")
-}
 func (UnimplementedAgentServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
@@ -382,42 +340,6 @@ func RegisterAgentServer(s grpc.ServiceRegistrar, srv AgentServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&Agent_ServiceDesc, srv)
-}
-
-func _Agent_Enroll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnrollRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AgentServer).Enroll(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Agent_Enroll_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServer).Enroll(ctx, req.(*EnrollRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Agent_CompleteEnrollment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteEnrollmentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AgentServer).CompleteEnrollment(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Agent_CompleteEnrollment_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServer).CompleteEnrollment(ctx, req.(*CompleteEnrollmentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _Agent_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -697,14 +619,6 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "voidgridbackup.agent.v1.Agent",
 	HandlerType: (*AgentServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Enroll",
-			Handler:    _Agent_Enroll_Handler,
-		},
-		{
-			MethodName: "CompleteEnrollment",
-			Handler:    _Agent_CompleteEnrollment_Handler,
-		},
 		{
 			MethodName: "Ping",
 			Handler:    _Agent_Ping_Handler,

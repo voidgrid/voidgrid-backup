@@ -6,17 +6,10 @@ option go_package = "github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 
 // Agent is served by every voidgrid-backup-agent. The server dials agents.
 //
-// Enrollment (unenrolled agent, TLS with the agent's self-signed bootstrap
-// cert, no client cert): the operator copies the enrollment code from the
-// agent's log into the server UI. The code carries a one-time secret and a pin
-// of the agent's bootstrap cert, so the server knows it reached that agent and
-// the agent only accepts a server that was given the code.
-//
-// After CompleteEnrollment the agent requires a client cert signed by the
-// server's CA, and refuses the enrollment RPCs.
+// An agent gets its certificate by registering with the server (see
+// registry.proto); until an operator approves it, it refuses every RPC. After
+// that it requires a client cert signed by the server's CA.
 service Agent {
-  rpc Enroll(EnrollRequest) returns (EnrollResponse);
-  rpc CompleteEnrollment(CompleteEnrollmentRequest) returns (CompleteEnrollmentResponse);
   rpc Ping(PingRequest) returns (PingResponse);
 
   // Backup repository operations. The server sends the repository config and
@@ -169,27 +162,6 @@ message RestoreResponse {
   // Restored, but something needs attention (e.g. ownership not restored).
   repeated string warnings = 5;
 }
-
-message EnrollRequest {
-  bytes secret = 1;
-  // Identity the server assigns; the agent puts it in its CSR.
-  string agent_id = 2;
-}
-
-message EnrollResponse {
-  // PKCS#10 CSR (DER) over the same key as the bootstrap cert.
-  bytes csr_der = 1;
-  string hostname = 2;
-  string version = 3;
-}
-
-message CompleteEnrollmentRequest {
-  bytes secret = 1;
-  bytes cert_der = 2;
-  bytes ca_der = 3;
-}
-
-message CompleteEnrollmentResponse {}
 
 message PingRequest {}
 
