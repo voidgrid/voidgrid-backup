@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -176,11 +175,7 @@ func (e *Engine) Backup(ctx context.Context, r Repo, paths, excludes []string, k
 
 	results := make([]PathResult, 0, len(paths))
 	for _, p := range paths {
-		res := e.backupOne(ctx, rep, p, excludes, keep)
-		if res.Err != nil {
-			slog.Warn("backup path failed", "repo", r.ID, "path", p, "err", res.Err)
-		}
-		results = append(results, res)
+		results = append(results, e.backupOne(ctx, rep, p, excludes, keep))
 	}
 	if err := e.maintain(ctx, rep); err != nil && len(results) > 0 {
 		results[0].Warnings = append(results[0].Warnings, "repository maintenance: "+err.Error())

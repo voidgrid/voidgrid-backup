@@ -186,7 +186,10 @@ func (a *Agent) Interceptor(ctx context.Context, req any, info *grpc.UnaryServer
 	if !ok || len(tlsInfo.State.VerifiedChains) == 0 {
 		return nil, status.Error(codes.Unauthenticated, "server client certificate required")
 	}
-	return handler(ctx, req)
+	start := time.Now()
+	resp, err := handler(ctx, req)
+	logRPC(info.FullMethod, time.Since(start), req, resp, err)
+	return resp, err
 }
 
 func (a *Agent) Ping(context.Context, *agentpb.PingRequest) (*agentpb.PingResponse, error) {
