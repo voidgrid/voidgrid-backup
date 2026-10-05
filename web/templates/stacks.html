@@ -75,7 +75,7 @@
           <option value="pause" {{if eq .Quiesce "pause"}}selected{{end}}>pause them (recommended with SQLite)</option>
           <option value="stop" {{if eq .Quiesce "stop"}}selected{{end}}>stop them</option>
         </select></label>
-      <label>Schedule <input name="schedule" class="mono" value="0 3 * * *"></label>
+      <label>Schedule (cron, blank = manual only) <input name="schedule" class="mono" value="0 3 * * *"></label>
       <label class="wide">Extra excludes, one per line <textarea name="excludes" placeholder="*.log&#10;/stack/cache/"></textarea></label>
       <div class="keep">
         <label>Keep latest <input name="keep_latest" value="{{$keep.Latest}}"></label>

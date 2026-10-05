@@ -43,7 +43,7 @@
         {{end}}{{end}}
       </fieldset>
       <label class="check wide"><input type="checkbox" name="quiesce" checked> Freeze guest filesystems through the QEMU guest agent when it is available</label>
-      <label>Schedule <input name="schedule" class="mono" value="30 3 * * *"></label>
+      <label>Schedule (cron, blank = manual only) <input name="schedule" class="mono" value="30 3 * * *"></label>
       <div class="keep">
         <label>Keep latest <input name="keep_latest" value="{{$keep.Latest}}"></label>
         <label>Hourly <input name="keep_hourly" value="{{$keep.Hourly}}"></label>

@@ -5,7 +5,7 @@
   <div class="card">
     <form class="grid" method="post" action="/jobs/{{$job.ID}}/edit">
       <label>Job name <input name="name" value="{{$job.Name}}" required></label>
-      <label>Schedule <input name="schedule" class="mono" value="{{$job.Schedule}}" placeholder="0 3 * * *"></label>
+      <label>Schedule (cron, blank = manual only) <input name="schedule" class="mono" value="{{$job.Schedule}}" placeholder="0 3 * * *"></label>
 
       {{with $job.Stack}}
       <div class="wide muted">Compose project <span class="mono">{{.Project}}</span> in <span class="mono">{{.WorkingDir}}</span></div>

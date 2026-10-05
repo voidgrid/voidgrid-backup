@@ -4,7 +4,7 @@
   <div class="card">
     {{if .Jobs}}
     <table>
-      <thead><tr><th>Name</th><th>Agent</th><th>Repository</th><th>Paths</th><th>Schedule</th><th>Last backup</th><th>Next</th></tr></thead>
+      <thead><tr><th>Name</th><th>Agent</th><th>Repository</th><th>Paths</th><th>Schedule</th><th>Last backup</th><th>Next</th><th></th></tr></thead>
       <tbody>
       {{range .Jobs}}
         <tr>
@@ -15,6 +15,7 @@
           <td class="mono">{{if .Schedule}}{{.Schedule}}{{if not .Enabled}} <span class="muted">(off)</span>{{end}}{{else}}<span class="muted">manual</span>{{end}}</td>
           <td>{{if .Running}}<span class="running">running</span>{{else if .Last}}<span class="{{.Last.Status}}">{{.Last.Status}}</span> {{ago .Last.StartedAt}}{{else}}<span class="muted">never</span>{{end}}</td>
           <td>{{if .Next.IsZero}}-{{else}}{{when .Next}}{{end}}</td>
+          <td><form method="post" action="/jobs/{{.ID}}/run"><button class="plain" type="submit" {{if .Running}}disabled{{end}}>Run</button></form></td>
         </tr>
       {{end}}
       </tbody>
