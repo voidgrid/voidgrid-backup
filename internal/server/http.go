@@ -61,6 +61,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("GET /repositories", u.repositories)
 	mux.HandleFunc("POST /repositories", u.addRepository)
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
+	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
 	mux.HandleFunc("POST /repositories/{id}/remove", u.removeRepository)
 	mux.HandleFunc("POST /repositories/{id}/wipe", u.wipeRepository)
 	mux.HandleFunc("GET /notifications", u.notifications)
@@ -242,12 +243,14 @@ func (u *ui) renameAgent(w http.ResponseWriter, r *http.Request) {
 
 type repoRow struct {
 	catalog.Repository
-	Location  string
-	Jobs      int
-	Stats     *RepoStats // last measurement of the space used in storage, nil if never measured
-	Measuring bool       // a measurement is running now
-	Wiping    bool       // its data is being deleted now
-	WipeError string     // why the last wipe failed
+	Location    string
+	Jobs        int
+	Stats       *RepoStats // last measurement of the space used in storage, nil if never measured
+	Measuring   bool       // a measurement is running now
+	Wiping      bool       // its data is being deleted now
+	Maint       *RepoMaintenance
+	Maintaining bool   // a maintenance cycle is running now
+	WipeError   string // why the last wipe failed
 }
 
 type repositoriesPage struct {
@@ -288,6 +291,12 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 			p.Measuring = true
 		}
 		row.WipeError = u.c.WipeError(ctx, rp.ID)
+		if m, ok := u.c.RepoMaintenance(ctx, rp.ID); ok {
+			row.Maint = &m
+		}
+		if row.Maintaining = u.c.IsRunning(repoMaintRunKey(rp.ID)); row.Maintaining {
+			p.Measuring = true
+		}
 		for _, j := range jobs {
 			if j.RepositoryID == rp.ID {
 				row.Jobs++

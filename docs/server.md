@@ -235,6 +235,45 @@ the agent that runs Kopia's compaction and garbage collection.
 - **Reed-Solomon error correction** (bitrot protection) costs about 2% space
   and can only be chosen when the repository is created.
 
+#### Maintenance
+
+Maintenance (compaction and garbage collection) is run by the repository's
+maintenance owner, and only by it. It runs at the end of each backup when
+Kopia's own schedule says it is due, and in addition the server runs a **full**
+cycle every 24 hours (plus a random 0-1 hour, so repositories don't all start
+together; the first runs after a server start are spread over 2 hours) for each
+repository that has at least one job. A repository with a running job waits.
+A repository without jobs is never scheduled. The **Run now** button on the
+Repositories page runs a full cycle on demand and works for every repository.
+
+The server asks an agent with a job on the repository; if that agent is not the
+owner it names the owner (the owner's host name is its agent ID) and the server
+asks that agent. If the owner is no longer a registered agent, for example a
+host that registered again without "replaces", the row shows that and no agent
+can run maintenance.
+
+Running maintenance does **not** free space at once. Kopia keeps deleted data
+for at least 24 hours and needs two garbage-collection cycles, so space from
+deleted snapshots comes back after about two days of daily runs.
+
+#### Removing backups
+
+- **Delete a snapshot**: on the job page, type its short ID in the box on its
+  row and press Delete. Only snapshots of that job's agent can be deleted. The
+  data is released later by maintenance (see above).
+- **Remove a repository**: Repositories page, Remove... section. Takes the
+  repository off the server and leaves its data in storage, so it can be added
+  again with its password. Refused while any job uses it.
+- **Wipe a repository**: same section. Deletes every blob of the repository from
+  storage through the agent you pick, then removes it from the server. Needs no
+  repository password, cannot be undone, and frees the space at once. It refuses
+  when no repository is found at the location, and while any job uses it or the
+  repository is busy. Empty directories remain on SFTP and filesystem storage.
+  If it fails, the error stays on the row and it can be run again.
+
+All of these ask you to type the name (or snapshot ID) and are logged at
+`WARN` on the server and the agent.
+
 ### Jobs
 
 There are three kinds of job, all with a cron schedule (standard 5 fields,

@@ -28,12 +28,15 @@ func NextRun(ctx context.Context, cat *catalog.Catalog, j catalog.Job) (time.Tim
 	return sched.Next(from), nil
 }
 
-// Schedule starts due jobs every tick until ctx ends.
+// Schedule starts due jobs and due repository maintenance every tick until
+// ctx ends.
 func (c *Controller) Schedule(ctx context.Context, tick time.Duration) {
 	t := time.NewTicker(tick)
 	defer t.Stop()
 	for {
-		c.startDue(ctx, time.Now())
+		now := time.Now()
+		c.startDue(ctx, now)
+		c.startMaintenance(ctx, now)
 		select {
 		case <-ctx.Done():
 			return

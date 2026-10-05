@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
@@ -66,4 +68,29 @@ func (u *ui) deleteSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectNotice(w, r, "/jobs/"+id, "Deleted snapshot "+shortID(sid)+". Its space is freed by a later maintenance run.")
+}
+
+// maintainRepository runs a full maintenance cycle in the background: it can
+// take a long time on a big repository.
+func (u *ui) maintainRepository(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	rp, err := u.c.Catalog.Repository(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if rp.InitializedAt.IsZero() {
+		redirectNotice(w, r, "/repositories", rp.Name+" is not initialized yet.")
+		return
+	}
+	if u.c.IsRunning(repoMaintRunKey(id)) || u.c.IsRunning(repoWipeKey(id)) {
+		redirectNotice(w, r, "/repositories", "Maintenance of "+rp.Name+" is already running, or the repository is being wiped.")
+		return
+	}
+	go func() {
+		if _, err := u.c.MaintainRepository(context.Background(), id); err != nil && !errors.Is(err, ErrRunning) {
+			slog.Error("manual maintenance", "repo", id, "err", err)
+		}
+	}()
+	redirectNotice(w, r, "/repositories", "Maintenance of "+rp.Name+" started. Data deleted recently is released only after Kopia's safety delays (about two days).")
 }

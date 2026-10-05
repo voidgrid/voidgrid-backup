@@ -16,7 +16,7 @@
   <div class="card">
     {{if .Repos}}
     <table>
-      <thead><tr><th>Name</th><th>Kind</th><th>Location</th><th>Bitrot ECC</th><th>Jobs</th><th>Stored</th><th>Initialized</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Kind</th><th>Location</th><th>Bitrot ECC</th><th>Jobs</th><th>Stored</th><th>Initialized</th><th>Maintenance</th><th></th></tr></thead>
       <tbody>
       {{range .Repos}}
         <tr>
@@ -30,6 +30,14 @@
             {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/stats" style="display:inline"><button class="plain" type="submit" {{if .Measuring}}disabled{{end}}>{{if .Stats}}Refresh{{else}}Measure{{end}}</button></form>{{end}}
           </td>
           <td>{{if .InitializedAt.IsZero}}<span class="warn">no</span>{{else}}{{when .InitializedAt}}{{end}}</td>
+          <td>
+            {{if .Maintaining}}<span class="running">running…</span>
+            {{else if .Maint}}{{if not .Maint.LastRun.IsZero}}<span class="{{if eq .Maint.Status "ok"}}ok{{else}}bad{{end}}">{{.Maint.Status}}</span> {{ago .Maint.LastRun}}{{else}}<span class="muted">not run yet</span>{{end}}
+              {{if .Maint.Error}}<div class="err">{{.Maint.Error}}</div>{{end}}
+              {{if .Jobs}}<div class="muted">next {{when .Maint.NextDue}}</div>{{end}}
+            {{else}}<span class="muted">{{if .Jobs}}scheduled soon{{else}}manual only{{end}}</span>{{end}}
+            {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/maintain" style="display:inline"><button class="plain" type="submit" {{if or .Maintaining .Wiping}}disabled{{end}} title="Full maintenance on the repository's maintenance owner. Deleted data is released only after Kopia's safety delays.">Run now</button></form>{{end}}
+          </td>
           <td>
             {{if .Wiping}}<span class="running">wiping…</span>{{else}}
             {{if .WipeError}}<div class="err">{{.WipeError}}</div>{{end}}
