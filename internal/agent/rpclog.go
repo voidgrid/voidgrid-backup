@@ -3,6 +3,7 @@ package agent
 import (
 	"log/slog"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
@@ -64,4 +65,24 @@ func requestRepo(req any) string {
 		return r.GetRepository().GetId()
 	}
 	return ""
+}
+
+// logStarted marks the moment a long operation begins, called once the host's
+// operation lock is held, so a run in progress is visible in the log and not
+// just its end.
+func logStarted(msg, repoID string, attrs ...any) {
+	slog.Info(msg, append([]any{"repo", repoID}, attrs...)...)
+}
+
+// logBackupStarted says what a backup request is about to read.
+func logBackupStarted(repoID string, req *agentpb.BackupRequest) {
+	switch {
+	case req.GetStack() != nil:
+		logStarted("backup started", repoID, "stack", req.GetStack().GetProject())
+	case req.GetVm() != nil:
+		logStarted("backup started", repoID, "vm", req.GetVm().GetName(),
+			"disks", strings.Join(req.GetVm().GetDisks(), ","), "freeze", req.GetVm().GetQuiesce())
+	default:
+		logStarted("backup started", repoID, "paths", strings.Join(req.GetPaths(), ","))
+	}
 }

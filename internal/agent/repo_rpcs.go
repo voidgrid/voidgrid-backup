@@ -58,6 +58,7 @@ func (a *Agent) Backup(ctx context.Context, req *agentpb.BackupRequest) (*agentp
 	}
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
+	logBackupStarted(r.ID, req)
 	if spec := req.GetStack(); spec != nil {
 		return a.backupStack(ctx, r, spec, keep)
 	}
@@ -145,6 +146,7 @@ func (a *Agent) Restore(ctx context.Context, req *agentpb.RestoreRequest) (*agen
 	}
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
+	logStarted("restore started", r.ID, "snapshot", req.GetSnapshotId(), "path", req.GetPath(), "target", req.GetTarget())
 	st, err := a.engine.Restore(ctx, r, req.GetSnapshotId(), req.GetPath(), req.GetTarget(), req.GetOverwrite())
 	if err != nil {
 		return nil, err

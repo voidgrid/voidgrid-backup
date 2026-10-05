@@ -77,6 +77,7 @@ func (a *Agent) RestoreStack(ctx context.Context, req *agentpb.RestoreStackReque
 	}
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
+	logStarted("restore started", r.ID, "stack", req.GetSnapshotId(), "target", req.GetTargetRoot())
 	st, err := a.engine.RestoreStack(ctx, r, dk, req.GetSnapshotId(), req.GetTargetRoot(), req.GetStopStack())
 	if err != nil {
 		return nil, err

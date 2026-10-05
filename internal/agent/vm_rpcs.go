@@ -70,6 +70,7 @@ func (a *Agent) RestoreVM(ctx context.Context, req *agentpb.RestoreVMRequest) (*
 	}
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
+	logStarted("restore started", r.ID, "vm", req.GetSnapshotId(), "target", req.GetTargetDir())
 	st, err := a.engine.RestoreVM(ctx, r, hv, req.GetSnapshotId(), req.GetTargetDir(), req.GetDefine())
 	if err != nil {
 		return nil, err

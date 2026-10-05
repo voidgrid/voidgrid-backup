@@ -75,3 +75,16 @@ func TestLogRPCQuietOnPolling(t *testing.T) {
 		t.Errorf("successful polling and browsing RPCs must not log, got %q", buf.String())
 	}
 }
+
+func TestLogBackupStarted(t *testing.T) {
+	buf := captureLog(t)
+	logBackupStarted("repo-7", &agentpb.BackupRequest{Vm: &agentpb.VMSpec{Name: "debian13", Disks: []string{"vda"}}})
+	logBackupStarted("repo-7", &agentpb.BackupRequest{Stack: &agentpb.StackSpec{Project: "web"}})
+	logBackupStarted("repo-7", &agentpb.BackupRequest{Paths: []string{"/a", "/b"}})
+	out := buf.String()
+	for _, want := range []string{"backup started", "repo=repo-7", "vm=debian13", "disks=vda", "stack=web", `paths=/a,/b`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log %q lacks %q", out, want)
+		}
+	}
+}
