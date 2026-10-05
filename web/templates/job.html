@@ -68,7 +68,7 @@
     {{if .SnapError}}<div class="empty err">Could not list snapshots: {{.SnapError}}</div>
     {{else if .Snapshots}}
     <table>
-      <thead><tr><th>Taken</th><th>Path</th><th>Files</th><th>Size</th><th>Errors</th><th>ID</th></tr></thead>
+      <thead><tr><th>Taken</th><th>Path</th><th>Files</th><th>Size</th><th>Errors</th><th>ID</th><th></th></tr></thead>
       <tbody>
       {{range .Snapshots}}
         <tr>
@@ -78,6 +78,7 @@
           <td class="num">{{bytes .Bytes}}</td>
           <td class="num">{{if .Errors}}<span class="bad">{{.Errors}}</span>{{else}}0{{end}}{{if .Incomplete}} <span class="warn">incomplete: {{.Incomplete}}</span>{{end}}</td>
           <td class="mono">{{short .ID}}</td>
+          <td><form method="post" action="/jobs/{{$job.ID}}/snapshots/{{.ID}}/delete" title="Type {{short .ID}} to delete this snapshot. Space is freed by a later maintenance run."><input name="confirm" placeholder="{{short .ID}}" size="9" autocomplete="off"> <button class="plain" type="submit" {{if $job.Running}}disabled{{end}}>Delete</button></form></td>
         </tr>
       {{end}}
       </tbody>

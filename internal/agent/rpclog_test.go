@@ -88,3 +88,22 @@ func TestLogBackupStarted(t *testing.T) {
 		}
 	}
 }
+
+func TestLogRPCRemovalsAndMaintenance(t *testing.T) {
+	buf := captureLog(t)
+	logRPC("/agent.Agent/DeleteSnapshot", time.Second,
+		&agentpb.DeleteSnapshotRequest{Repository: &agentpb.Repository{Id: "repo-7"}, SnapshotId: "k9"}, &agentpb.DeleteSnapshotResponse{}, nil)
+	logRPC("/agent.Agent/WipeRepository", time.Second,
+		&agentpb.WipeRepositoryRequest{Repository: &agentpb.Repository{Id: "repo-7"}}, &agentpb.WipeRepositoryResponse{Blobs: 12, Bytes: 34}, nil)
+	logRPC("/agent.Agent/Maintain", time.Second,
+		&agentpb.MaintainRequest{Repository: &agentpb.Repository{Id: "repo-7"}}, &agentpb.MaintainResponse{Owner: "voidgrid-backup@agent-2"}, nil)
+	out := buf.String()
+	for _, want := range []string{
+		"snapshot deleted", "snapshot=k9", "level=WARN msg=\"repository wiped\"", "blobs=12",
+		"not the owner", "owner=voidgrid-backup@agent-2",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log %q lacks %q", out, want)
+		}
+	}
+}

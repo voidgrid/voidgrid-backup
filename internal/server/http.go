@@ -61,6 +61,8 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("GET /repositories", u.repositories)
 	mux.HandleFunc("POST /repositories", u.addRepository)
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
+	mux.HandleFunc("POST /repositories/{id}/remove", u.removeRepository)
+	mux.HandleFunc("POST /repositories/{id}/wipe", u.wipeRepository)
 	mux.HandleFunc("GET /notifications", u.notifications)
 	mux.HandleFunc("POST /notifications", u.saveNotifications)
 	mux.HandleFunc("POST /notifications/test", u.testNotifications)
@@ -76,6 +78,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("GET /jobs/{id}/edit", u.editJob)
 	mux.HandleFunc("POST /jobs/{id}/edit", u.saveJob)
 	mux.HandleFunc("GET /jobs/{id}/snapshots/{sid}", u.browse)
+	mux.HandleFunc("POST /jobs/{id}/snapshots/{sid}/delete", u.deleteSnapshot)
 	mux.HandleFunc("POST /jobs/{id}/snapshots/{sid}/restore", u.restore)
 	mux.HandleFunc("POST /jobs/{id}/snapshots/{sid}/restore-stack", u.restoreStack)
 	mux.HandleFunc("POST /jobs/{id}/snapshots/{sid}/import", u.importDump)
@@ -243,6 +246,8 @@ type repoRow struct {
 	Jobs      int
 	Stats     *RepoStats // last measurement of the space used in storage, nil if never measured
 	Measuring bool       // a measurement is running now
+	Wiping    bool       // its data is being deleted now
+	WipeError string     // why the last wipe failed
 }
 
 type repositoriesPage struct {
@@ -279,6 +284,10 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 		if row.Measuring = u.c.IsRunning(repoMeasureKey(rp.ID)); row.Measuring {
 			p.Measuring = true
 		}
+		if row.Wiping = u.c.IsRunning(repoWipeKey(rp.ID)); row.Wiping {
+			p.Measuring = true
+		}
+		row.WipeError = u.c.WipeError(ctx, rp.ID)
 		for _, j := range jobs {
 			if j.RepositoryID == rp.ID {
 				row.Jobs++

@@ -16,7 +16,7 @@
   <div class="card">
     {{if .Repos}}
     <table>
-      <thead><tr><th>Name</th><th>Kind</th><th>Location</th><th>Bitrot ECC</th><th>Jobs</th><th>Stored</th><th>Initialized</th></tr></thead>
+      <thead><tr><th>Name</th><th>Kind</th><th>Location</th><th>Bitrot ECC</th><th>Jobs</th><th>Stored</th><th>Initialized</th><th></th></tr></thead>
       <tbody>
       {{range .Repos}}
         <tr>
@@ -30,6 +30,25 @@
             {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/stats" style="display:inline"><button class="plain" type="submit" {{if .Measuring}}disabled{{end}}>{{if .Stats}}Refresh{{else}}Measure{{end}}</button></form>{{end}}
           </td>
           <td>{{if .InitializedAt.IsZero}}<span class="warn">no</span>{{else}}{{when .InitializedAt}}{{end}}</td>
+          <td>
+            {{if .Wiping}}<span class="running">wiping…</span>{{else}}
+            {{if .WipeError}}<div class="err">{{.WipeError}}</div>{{end}}
+            <details>
+              <summary>Remove…</summary>
+              {{if .Jobs}}<p class="hint">{{.Jobs}} job(s) still use this repository. Delete them first.</p>{{else}}
+              <form method="post" action="/repositories/{{.ID}}/remove">
+                <p class="hint"><strong>Remove from the server.</strong> The data in storage stays; add the repository again with its password to use it.</p>
+                <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Remove</button>
+              </form>
+              <form method="post" action="/repositories/{{.ID}}/wipe">
+                <p class="hint"><strong>Wipe all its data.</strong> Deletes every backup in this repository from storage and cannot be undone. Space is freed at once. Pick an agent that can reach the storage.</p>
+                <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+                <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Wipe</button>
+              </form>
+              {{end}}
+            </details>
+            {{end}}
+          </td>
         </tr>
       {{end}}
       </tbody>

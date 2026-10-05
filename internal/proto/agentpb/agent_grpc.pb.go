@@ -31,6 +31,9 @@ const (
 	Agent_ListVMs_FullMethodName        = "/voidgridbackup.agent.v1.Agent/ListVMs"
 	Agent_RestoreVM_FullMethodName      = "/voidgridbackup.agent.v1.Agent/RestoreVM"
 	Agent_Check_FullMethodName          = "/voidgridbackup.agent.v1.Agent/Check"
+	Agent_DeleteSnapshot_FullMethodName = "/voidgridbackup.agent.v1.Agent/DeleteSnapshot"
+	Agent_WipeRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/WipeRepository"
+	Agent_Maintain_FullMethodName       = "/voidgridbackup.agent.v1.Agent/Maintain"
 	Agent_PathUsage_FullMethodName      = "/voidgridbackup.agent.v1.Agent/PathUsage"
 	Agent_RepoStats_FullMethodName      = "/voidgridbackup.agent.v1.Agent/RepoStats"
 	Agent_Logs_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Logs"
@@ -64,6 +67,13 @@ type AgentClient interface {
 	// Repository check: verifies snapshot metadata, that every content blob
 	// exists, and (with ECC on) repairs bitrot found along the way.
 	Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckResponse, error)
+	// Removing backups. DeleteSnapshot forgets one snapshot (space comes back
+	// only after later maintenance). WipeRepository deletes every blob in the
+	// repository's storage, no repository password needed. Maintain runs a full
+	// maintenance cycle if this agent is the repository's maintenance owner.
+	DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error)
+	WipeRepository(ctx context.Context, in *WipeRepositoryRequest, opts ...grpc.CallOption) (*WipeRepositoryResponse, error)
+	Maintain(ctx context.Context, in *MaintainRequest, opts ...grpc.CallOption) (*MaintainResponse, error)
 	// Host filesystem sizes, for choosing what to back up.
 	PathUsage(ctx context.Context, in *PathUsageRequest, opts ...grpc.CallOption) (*PathUsageResponse, error)
 	// Space a repository takes in its storage (all Kopia blobs). Lists every
@@ -201,6 +211,36 @@ func (c *agentClient) Check(ctx context.Context, in *CheckRequest, opts ...grpc.
 	return out, nil
 }
 
+func (c *agentClient) DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteSnapshotResponse)
+	err := c.cc.Invoke(ctx, Agent_DeleteSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentClient) WipeRepository(ctx context.Context, in *WipeRepositoryRequest, opts ...grpc.CallOption) (*WipeRepositoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WipeRepositoryResponse)
+	err := c.cc.Invoke(ctx, Agent_WipeRepository_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentClient) Maintain(ctx context.Context, in *MaintainRequest, opts ...grpc.CallOption) (*MaintainResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaintainResponse)
+	err := c.cc.Invoke(ctx, Agent_Maintain_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentClient) PathUsage(ctx context.Context, in *PathUsageRequest, opts ...grpc.CallOption) (*PathUsageResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PathUsageResponse)
@@ -259,6 +299,13 @@ type AgentServer interface {
 	// Repository check: verifies snapshot metadata, that every content blob
 	// exists, and (with ECC on) repairs bitrot found along the way.
 	Check(context.Context, *CheckRequest) (*CheckResponse, error)
+	// Removing backups. DeleteSnapshot forgets one snapshot (space comes back
+	// only after later maintenance). WipeRepository deletes every blob in the
+	// repository's storage, no repository password needed. Maintain runs a full
+	// maintenance cycle if this agent is the repository's maintenance owner.
+	DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error)
+	WipeRepository(context.Context, *WipeRepositoryRequest) (*WipeRepositoryResponse, error)
+	Maintain(context.Context, *MaintainRequest) (*MaintainResponse, error)
 	// Host filesystem sizes, for choosing what to back up.
 	PathUsage(context.Context, *PathUsageRequest) (*PathUsageResponse, error)
 	// Space a repository takes in its storage (all Kopia blobs). Lists every
@@ -311,6 +358,15 @@ func (UnimplementedAgentServer) RestoreVM(context.Context, *RestoreVMRequest) (*
 }
 func (UnimplementedAgentServer) Check(context.Context, *CheckRequest) (*CheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
+}
+func (UnimplementedAgentServer) DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteSnapshot not implemented")
+}
+func (UnimplementedAgentServer) WipeRepository(context.Context, *WipeRepositoryRequest) (*WipeRepositoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WipeRepository not implemented")
+}
+func (UnimplementedAgentServer) Maintain(context.Context, *MaintainRequest) (*MaintainResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Maintain not implemented")
 }
 func (UnimplementedAgentServer) PathUsage(context.Context, *PathUsageRequest) (*PathUsageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PathUsage not implemented")
@@ -558,6 +614,60 @@ func _Agent_Check_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Agent_DeleteSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).DeleteSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_DeleteSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).DeleteSnapshot(ctx, req.(*DeleteSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Agent_WipeRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WipeRepositoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).WipeRepository(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_WipeRepository_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).WipeRepository(ctx, req.(*WipeRepositoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Agent_Maintain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaintainRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).Maintain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_Maintain_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).Maintain(ctx, req.(*MaintainRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Agent_PathUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PathUsageRequest)
 	if err := dec(in); err != nil {
@@ -666,6 +776,18 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Check",
 			Handler:    _Agent_Check_Handler,
+		},
+		{
+			MethodName: "DeleteSnapshot",
+			Handler:    _Agent_DeleteSnapshot_Handler,
+		},
+		{
+			MethodName: "WipeRepository",
+			Handler:    _Agent_WipeRepository_Handler,
+		},
+		{
+			MethodName: "Maintain",
+			Handler:    _Agent_Maintain_Handler,
 		},
 		{
 			MethodName: "PathUsage",

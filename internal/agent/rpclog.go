@@ -33,6 +33,20 @@ func logRPC(method string, took time.Duration, req, resp any, err error) {
 		for _, w := range r.GetWarnings() {
 			slog.Warn("restore warning", "method", method, "repo", repo, "warning", w)
 		}
+	case *agentpb.DeleteSnapshotResponse:
+		id := ""
+		if dr, ok := req.(*agentpb.DeleteSnapshotRequest); ok {
+			id = dr.GetSnapshotId()
+		}
+		slog.Info("snapshot deleted", "repo", repo, "snapshot", id, "took", t)
+	case *agentpb.WipeRepositoryResponse:
+		slog.Warn("repository wiped", "repo", repo, "blobs", r.GetBlobs(), "bytes", r.GetBytes(), "took", t)
+	case *agentpb.MaintainResponse:
+		if r.GetRan() {
+			slog.Info("maintenance finished", "repo", repo, "took", t)
+		} else {
+			slog.Info("maintenance skipped: this agent is not the owner", "repo", repo, "owner", r.GetOwner())
+		}
 	case *agentpb.CheckResponse:
 		slog.Info("check finished", "repo", repo, "snapshots", r.GetSnapshots(), "objects", r.GetObjectsChecked(),
 			"files_read", r.GetFilesRead(), "bytes_read", r.GetBytesRead(), "errors", len(r.GetErrors()), "took", t)

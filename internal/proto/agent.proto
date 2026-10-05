@@ -33,6 +33,14 @@ service Agent {
   // exists, and (with ECC on) repairs bitrot found along the way.
   rpc Check(CheckRequest) returns (CheckResponse);
 
+  // Removing backups. DeleteSnapshot forgets one snapshot (space comes back
+  // only after later maintenance). WipeRepository deletes every blob in the
+  // repository's storage, no repository password needed. Maintain runs a full
+  // maintenance cycle if this agent is the repository's maintenance owner.
+  rpc DeleteSnapshot(DeleteSnapshotRequest) returns (DeleteSnapshotResponse);
+  rpc WipeRepository(WipeRepositoryRequest) returns (WipeRepositoryResponse);
+  rpc Maintain(MaintainRequest) returns (MaintainResponse);
+
   // Host filesystem sizes, for choosing what to back up.
   rpc PathUsage(PathUsageRequest) returns (PathUsageResponse);
 
@@ -362,4 +370,31 @@ message LogEntry {
 message LogsResponse {
   // Oldest first.
   repeated LogEntry entries = 1;
+}
+
+message DeleteSnapshotRequest {
+  Repository repository = 1;
+  string snapshot_id = 2;
+}
+
+message DeleteSnapshotResponse {}
+
+message WipeRepositoryRequest {
+  Repository repository = 1;
+}
+
+message WipeRepositoryResponse {
+  int64 blobs = 1;
+  int64 bytes = 2;
+}
+
+message MaintainRequest {
+  Repository repository = 1;
+}
+
+message MaintainResponse {
+  bool ran = 1;
+  // Set when this agent is not the maintenance owner: "user@host", where host
+  // is the owning agent's ID. Nothing ran in that case.
+  string owner = 2;
 }
