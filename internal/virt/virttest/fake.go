@@ -12,15 +12,16 @@ import (
 )
 
 type Fake struct {
-	Mu         sync.Mutex
-	Dom        *virt.Domain // nil: no such domain
-	DomainXML  string
-	QuiesceErr error // returned by a quiescing snapshot (no guest agent)
-	CommitErr  error
-	Calls      []string
-	Overlays   []string
-	OnOverlay  bool // disks are currently on overlays
-	Defined    string
+	Mu          sync.Mutex
+	Dom         *virt.Domain // nil: no such domain
+	DomainXML   string
+	QuiesceErr  error // returned by a quiescing snapshot (no guest agent)
+	CommitErr   error
+	KeepOverlay bool // a commit leaves the overlay file behind
+	Calls       []string
+	Overlays    []string
+	OnOverlay   bool // disks are currently on overlays
+	Defined     string
 }
 
 func (f *Fake) Domains(ctx context.Context) ([]virt.Domain, error) {
@@ -72,8 +73,10 @@ func (f *Fake) BlockCommit(_ context.Context, _, disk string) error {
 	if f.CommitErr != nil {
 		return f.CommitErr
 	}
-	for _, p := range f.Overlays {
-		os.Remove(p)
+	if !f.KeepOverlay {
+		for _, p := range f.Overlays {
+			os.Remove(p)
+		}
 	}
 	f.OnOverlay = false
 	return nil

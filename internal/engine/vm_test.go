@@ -156,3 +156,54 @@ func TestVMBackupShutoffAndRestore(t *testing.T) {
 		t.Fatalf("directory restore: %q", got)
 	}
 }
+
+// libvirt normally deletes the overlay on pivot; when it doesn't, the agent
+// removes it without a warning.
+func TestVMBackupRemovesLeftoverOverlay(t *testing.T) {
+	ctx := context.Background()
+	e, r, hv, _ := newVMFixture(t, virt.StateRunning)
+	hv.KeepOverlay = true
+	res, err := e.BackupVM(ctx, r, hv, VMSpec{Name: "ha"}, keepOne)
+	if err != nil || res.Err != nil || len(res.Warnings) != 0 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if len(hv.Overlays) == 0 {
+		t.Fatal("fake made no overlay")
+	}
+	for _, p := range hv.Overlays {
+		if _, err := os.Stat(p); err == nil {
+			t.Fatalf("overlay %s left behind", p)
+		}
+	}
+}
+
+func TestRemoveLeftoverOverlay(t *testing.T) {
+	dir := t.TempDir()
+	if w := removeLeftoverOverlay(filepath.Join(dir, "gone")); w != "" {
+		t.Errorf("missing overlay must not warn: %q", w)
+	}
+	present := filepath.Join(dir, "present")
+	writeFile(t, present, "x")
+	if w := removeLeftoverOverlay(present); w != "" {
+		t.Errorf("removable overlay must not warn: %q", w)
+	}
+	if _, err := os.Stat(present); err == nil {
+		t.Error("overlay not removed")
+	}
+	if os.Geteuid() == 0 {
+		return // root ignores directory permissions
+	}
+	ro := filepath.Join(dir, "ro")
+	if err := os.Mkdir(ro, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stuck := filepath.Join(ro, "stuck")
+	writeFile(t, stuck, "x")
+	if err := os.Chmod(ro, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(ro, 0o700) })
+	if w := removeLeftoverOverlay(stuck); !strings.Contains(w, "remove leftover overlay") {
+		t.Errorf("an overlay that cannot be removed must warn, got %q", w)
+	}
+}

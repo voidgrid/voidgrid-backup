@@ -196,12 +196,28 @@ func withOverlays(ctx context.Context, hv virt.Hypervisor, dom virt.Domain, disk
 				d.Target, overlays[d.Target], dom.Name, d.Target, cerr))
 			continue
 		}
-		// libvirt deletes the overlay on pivot; remove a leftover if it didn't.
-		if rmErr := os.Remove(overlays[d.Target]); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
-			warnings = append(warnings, fmt.Sprintf("remove leftover overlay %s: %v", overlays[d.Target], rmErr))
+		if w := removeLeftoverOverlay(overlays[d.Target]); w != "" {
+			warnings = append(warnings, w)
 		}
 	}
 	return warnings, err
+}
+
+// removeLeftoverOverlay deletes an overlay libvirt left behind after the
+// pivot and returns a warning if it could not. libvirt normally deletes it
+// itself, so the file is looked up first: on a read-only mount unlink fails
+// with "read-only file system" even for a file that does not exist, which
+// would be a false warning.
+func removeLeftoverOverlay(p string) string {
+	if _, err := os.Lstat(p); errors.Is(err, os.ErrNotExist) {
+		return ""
+	} else if err != nil {
+		return fmt.Sprintf("check for leftover overlay %s: %v", p, err)
+	}
+	if err := os.Remove(p); err != nil {
+		return fmt.Sprintf("remove leftover overlay %s: %v", p, err)
+	}
+	return ""
 }
 
 // RestoreVM restores a VM snapshot. With targetDir set, the snapshot tree
