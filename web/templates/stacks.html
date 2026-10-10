@@ -16,7 +16,7 @@
           <td>{{.Name}}</td>
           <td class="mono">{{.Image}}</td>
           <td><span class="{{if eq .State "running"}}ok{{else}}warn{{end}}">{{.State}}</span></td>
-          <td>{{if .DumpKind}}{{.DumpKind}} database{{end}}{{if .SqliteFiles}} SQLite: <span class="mono">{{join .SqliteFiles ", "}}</span>{{end}}</td>
+          <td>{{if .DumpKind}}{{.DumpKind}} database{{end}}{{if .SqliteFiles}} SQLite: <span class="mono">{{join .SqliteFiles ", "}}</span>{{end}}{{if .DuckdbFiles}} DuckDB: <span class="mono">{{join .DuckdbFiles ", "}}</span>{{end}}</td>
         </tr>
       {{end}}
       </tbody>
@@ -69,10 +69,11 @@
       </fieldset>
       {{end}}
 
+      {{if or .SQLite .DuckDB}}<p class="hint wide">File databases found ({{if .SQLite}}SQLite{{end}}{{if and .SQLite .DuckDB}}, {{end}}{{if .DuckDB}}DuckDB{{end}}). A copy taken while an app writes to them can be inconsistent, so pausing the other containers is preselected.</p>{{end}}
       <label>While reading files
         <select name="quiesce">
           <option value="none" {{if eq .Quiesce "none"}}selected{{end}}>leave containers running</option>
-          <option value="pause" {{if eq .Quiesce "pause"}}selected{{end}}>pause them (recommended with SQLite)</option>
+          <option value="pause" {{if eq .Quiesce "pause"}}selected{{end}}>pause them (recommended with SQLite or DuckDB)</option>
           <option value="stop" {{if eq .Quiesce "stop"}}selected{{end}}>stop them</option>
         </select></label>
       <label>Schedule (cron, blank = manual only) <input name="schedule" class="mono" value="0 3 * * *"></label>

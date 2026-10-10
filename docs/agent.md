@@ -147,7 +147,7 @@ SQLite files. A stack job takes one snapshot per project containing:
 - Host files like `/etc/localtime` and sockets are unticked, so an in-place
   restore can't overwrite the host's own files.
 - Redis/Valkey defaults to no dump (usually a cache).
-- "Pause" is suggested when SQLite files are found.
+- "Pause" is suggested when SQLite or DuckDB files are found. Both are recognised by their file header (any of `.db`, `.sqlite`, `.sqlite3`, `.duckdb`, `.ddb`, a few levels deep in a mount) and listed on the stacks page. They are copied as plain files: pausing makes the copy crash-consistent, not a dump, so test a restore.
 
 **Database dumps** run inside the database container with `docker exec` and
 stream straight into the snapshot (nothing is staged on disk). Credentials

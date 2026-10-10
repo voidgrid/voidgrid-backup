@@ -37,6 +37,7 @@ type stackView struct {
 	Mounts   []mountOpt
 	Dumps    []dumpOpt
 	SQLite   []string
+	DuckDB   []string
 	Quiesce  string
 	Existing string // name of a job already backing up this project on this agent
 }
@@ -91,8 +92,9 @@ func buildStackView(st *agentpb.Stack) stackView {
 			dumped[svc.GetName()] = def != "none"
 		}
 		v.SQLite = append(v.SQLite, svc.GetSqliteFiles()...)
+		v.DuckDB = append(v.DuckDB, svc.GetDuckdbFiles()...)
 	}
-	if len(v.SQLite) > 0 {
+	if len(v.SQLite) > 0 || len(v.DuckDB) > 0 {
 		v.Quiesce = "pause"
 	}
 	bySource := map[string]*mountOpt{}

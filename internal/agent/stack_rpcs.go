@@ -34,7 +34,7 @@ func (a *Agent) ListStacks(ctx context.Context, _ *agentpb.ListStacksRequest) (*
 		for _, svc := range st.Services {
 			pv := &agentpb.Service{
 				Name: svc.Name, Container: svc.Container, Image: svc.Image, State: svc.State,
-				DumpKind: svc.DumpKind, SqliteFiles: svc.SQLiteFiles,
+				DumpKind: svc.DumpKind, SqliteFiles: svc.SQLiteFiles, DuckdbFiles: svc.DuckDBFiles,
 			}
 			for _, m := range svc.Mounts {
 				ro, _ := guard.ReadOnly(m.Source)

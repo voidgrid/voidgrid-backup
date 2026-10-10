@@ -85,6 +85,9 @@ func TestStacks(t *testing.T) {
 	data := t.TempDir()
 	os.WriteFile(filepath.Join(data, "app.db"), []byte("SQLite format 3\x00rest"), 0o644)
 	os.WriteFile(filepath.Join(data, "fake.db"), []byte("not a database at all"), 0o644)
+	os.WriteFile(filepath.Join(data, "olap.duckdb"), append([]byte("12345678DUCK"), make([]byte, 16)...), 0o644)
+	os.WriteFile(filepath.Join(data, "renamed.db"), append([]byte("12345678DUCK"), make([]byte, 16)...), 0o644)
+	os.WriteFile(filepath.Join(data, "short.duckdb"), []byte("DUCK"), 0o644)
 	fake := dockertest.New(t,
 		dockertest.ComposeContainer("a1", "notes", "/srv/notes", "app", "ghcr.io/x/notes:latest", "running", dockertest.Bind(data, "/data")),
 		dockertest.ComposeContainer("d1", "notes", "/srv/notes", "db", "docker.io/library/postgres:16-alpine", "running"),
@@ -113,6 +116,14 @@ func TestStacks(t *testing.T) {
 	app := notes.Services[0]
 	if app.Name != "app" || len(app.SQLiteFiles) != 1 || filepath.Base(app.SQLiteFiles[0]) != "app.db" {
 		t.Fatalf("sqlite detection: %+v", app)
+	}
+	if len(app.DuckDBFiles) != 2 {
+		t.Fatalf("duckdb detection: %+v", app.DuckDBFiles)
+	}
+	for _, f := range app.DuckDBFiles {
+		if b := filepath.Base(f); b != "olap.duckdb" && b != "renamed.db" {
+			t.Fatalf("duckdb detection picked %s", f)
+		}
 	}
 	if stacks[1].Services[0].DumpKind != docker.DumpMariaDB {
 		t.Fatalf("mariadb detection: %+v", stacks[1].Services[0])

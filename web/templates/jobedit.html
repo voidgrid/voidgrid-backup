@@ -45,7 +45,7 @@
         <select name="quiesce">
           {{$q := .Quiesce}}
           <option value="none" {{if eq $q "none"}}selected{{end}}>leave containers running</option>
-          <option value="pause" {{if eq $q "pause"}}selected{{end}}>pause them (recommended with SQLite)</option>
+          <option value="pause" {{if eq $q "pause"}}selected{{end}}>pause them (recommended with SQLite or DuckDB)</option>
           <option value="stop" {{if eq $q "stop"}}selected{{end}}>stop them</option>
         </select></label>
       {{else}}{{with $job.VM}}

@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -40,6 +41,7 @@ type Service struct {
 	Mounts      []Mount // bind mounts and volumes with a host path
 	DumpKind    string  // suggested database dump, "" if none
 	SQLiteFiles []string
+	DuckDBFiles []string
 }
 
 // Stacks groups containers into compose projects. Containers without
@@ -76,7 +78,9 @@ func (c *Client) Stacks(ctx context.Context) ([]Stack, error) {
 		for _, m := range ct.Mounts {
 			if (m.Type == "bind" || m.Type == "volume") && m.Source != "" {
 				svc.Mounts = append(svc.Mounts, m)
-				svc.SQLiteFiles = append(svc.SQLiteFiles, findSQLite(m.Source, 3, 5)...)
+				sq, dk := findFileDatabases(m.Source, 3, 5)
+				svc.SQLiteFiles = append(svc.SQLiteFiles, sq...)
+				svc.DuckDBFiles = append(svc.DuckDBFiles, dk...)
 			}
 		}
 		st.Services = append(st.Services, svc)
@@ -121,13 +125,13 @@ func DetectDump(image string) string {
 	return ""
 }
 
-// findSQLite looks a few levels deep for SQLite databases, which need the
-// app paused (or stopped) for a consistent copy.
-func findSQLite(root string, depth, limit int) []string {
-	var out []string
+// findFileDatabases looks a few levels deep for SQLite and DuckDB files,
+// which need the app paused (or stopped) for a consistent copy. Files are
+// recognised by their header, not their name, so a ".db" can be either.
+func findFileDatabases(root string, depth, limit int) (sqlite, duckdb []string) {
 	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
 	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error { //nolint:errcheck // the callback skips unreadable entries; a partial result is intended
-		if err != nil || len(out) >= limit {
+		if err != nil || len(sqlite) >= limit || len(duckdb) >= limit {
 			return filepath.SkipDir
 		}
 		if d.IsDir() {
@@ -137,25 +141,38 @@ func findSQLite(root string, depth, limit int) []string {
 			return nil
 		}
 		switch strings.ToLower(filepath.Ext(p)) {
-		case ".db", ".sqlite", ".sqlite3":
-			if isSQLite(p) {
-				out = append(out, p)
+		case ".db", ".sqlite", ".sqlite3", ".duckdb", ".ddb":
+			switch fileDatabaseKind(p) {
+			case "sqlite":
+				sqlite = append(sqlite, p)
+			case "duckdb":
+				duckdb = append(duckdb, p)
 			}
 		}
 		return nil
 	})
-	return out
+	return sqlite, duckdb
 }
 
-func isSQLite(p string) bool {
+// fileDatabaseKind reads the file header: "SQLite format 3\x00" at the start,
+// or DuckDB's "DUCK" magic at offset 8 (after the header checksum).
+func fileDatabaseKind(p string) string {
 	f, err := os.Open(p)
 	if err != nil {
-		return false
+		return ""
 	}
 	defer f.Close() //nolint:errcheck // read-only file
 	hdr := make([]byte, 16)
-	n, _ := f.Read(hdr)
-	return n == 16 && string(hdr) == "SQLite format 3\x00"
+	if n, _ := io.ReadFull(f, hdr); n < len(hdr) {
+		return ""
+	}
+	switch {
+	case string(hdr) == "SQLite format 3\x00":
+		return "sqlite"
+	case string(hdr[8:12]) == "DUCK":
+		return "duckdb"
+	}
+	return ""
 }
 
 // DumpCommand is the command run inside a database container to write a
