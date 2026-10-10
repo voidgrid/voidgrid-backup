@@ -41,6 +41,15 @@ service Agent {
   rpc WipeRepository(WipeRepositoryRequest) returns (WipeRepositoryResponse);
   rpc Maintain(MaintainRequest) returns (MaintainResponse);
 
+  // Editing a repository's location. TestRepository connects to the storage
+  // in the request and opens the repository there (it never creates one);
+  // warnings are non-fatal findings, e.g. a filesystem path that is not a
+  // network mount. MoveRepository renames the repository's directory from the
+  // location in `repository` to the one in new_config_json (SFTP and
+  // filesystem only) and refuses if the destination exists.
+  rpc TestRepository(TestRepositoryRequest) returns (TestRepositoryResponse);
+  rpc MoveRepository(MoveRepositoryRequest) returns (MoveRepositoryResponse);
+
   // Host filesystem sizes, for choosing what to back up.
   rpc PathUsage(PathUsageRequest) returns (PathUsageResponse);
 
@@ -203,6 +212,7 @@ message Service {
   // Suggested database dump ("postgres", "mariadb", "redis"), "" if none.
   string dump_kind = 6;
   repeated string sqlite_files = 7;
+  repeated string duckdb_files = 8;
 }
 
 message Stack {
@@ -387,6 +397,23 @@ message WipeRepositoryResponse {
   int64 blobs = 1;
   int64 bytes = 2;
 }
+
+message TestRepositoryRequest {
+  Repository repository = 1;
+}
+
+message TestRepositoryResponse {
+  repeated string warnings = 1;
+}
+
+message MoveRepositoryRequest {
+  // The repository at its current location.
+  Repository repository = 1;
+  // JSON of repocfg.Config for the new location, secrets included.
+  bytes new_config_json = 2;
+}
+
+message MoveRepositoryResponse {}
 
 message MaintainRequest {
   Repository repository = 1;

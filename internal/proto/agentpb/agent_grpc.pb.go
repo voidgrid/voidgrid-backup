@@ -34,6 +34,8 @@ const (
 	Agent_DeleteSnapshot_FullMethodName = "/voidgridbackup.agent.v1.Agent/DeleteSnapshot"
 	Agent_WipeRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/WipeRepository"
 	Agent_Maintain_FullMethodName       = "/voidgridbackup.agent.v1.Agent/Maintain"
+	Agent_TestRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/TestRepository"
+	Agent_MoveRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/MoveRepository"
 	Agent_PathUsage_FullMethodName      = "/voidgridbackup.agent.v1.Agent/PathUsage"
 	Agent_RepoStats_FullMethodName      = "/voidgridbackup.agent.v1.Agent/RepoStats"
 	Agent_Logs_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Logs"
@@ -74,6 +76,14 @@ type AgentClient interface {
 	DeleteSnapshot(ctx context.Context, in *DeleteSnapshotRequest, opts ...grpc.CallOption) (*DeleteSnapshotResponse, error)
 	WipeRepository(ctx context.Context, in *WipeRepositoryRequest, opts ...grpc.CallOption) (*WipeRepositoryResponse, error)
 	Maintain(ctx context.Context, in *MaintainRequest, opts ...grpc.CallOption) (*MaintainResponse, error)
+	// Editing a repository's location. TestRepository connects to the storage
+	// in the request and opens the repository there (it never creates one);
+	// warnings are non-fatal findings, e.g. a filesystem path that is not a
+	// network mount. MoveRepository renames the repository's directory from the
+	// location in `repository` to the one in new_config_json (SFTP and
+	// filesystem only) and refuses if the destination exists.
+	TestRepository(ctx context.Context, in *TestRepositoryRequest, opts ...grpc.CallOption) (*TestRepositoryResponse, error)
+	MoveRepository(ctx context.Context, in *MoveRepositoryRequest, opts ...grpc.CallOption) (*MoveRepositoryResponse, error)
 	// Host filesystem sizes, for choosing what to back up.
 	PathUsage(ctx context.Context, in *PathUsageRequest, opts ...grpc.CallOption) (*PathUsageResponse, error)
 	// Space a repository takes in its storage (all Kopia blobs). Lists every
@@ -241,6 +251,26 @@ func (c *agentClient) Maintain(ctx context.Context, in *MaintainRequest, opts ..
 	return out, nil
 }
 
+func (c *agentClient) TestRepository(ctx context.Context, in *TestRepositoryRequest, opts ...grpc.CallOption) (*TestRepositoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestRepositoryResponse)
+	err := c.cc.Invoke(ctx, Agent_TestRepository_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentClient) MoveRepository(ctx context.Context, in *MoveRepositoryRequest, opts ...grpc.CallOption) (*MoveRepositoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MoveRepositoryResponse)
+	err := c.cc.Invoke(ctx, Agent_MoveRepository_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentClient) PathUsage(ctx context.Context, in *PathUsageRequest, opts ...grpc.CallOption) (*PathUsageResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PathUsageResponse)
@@ -306,6 +336,14 @@ type AgentServer interface {
 	DeleteSnapshot(context.Context, *DeleteSnapshotRequest) (*DeleteSnapshotResponse, error)
 	WipeRepository(context.Context, *WipeRepositoryRequest) (*WipeRepositoryResponse, error)
 	Maintain(context.Context, *MaintainRequest) (*MaintainResponse, error)
+	// Editing a repository's location. TestRepository connects to the storage
+	// in the request and opens the repository there (it never creates one);
+	// warnings are non-fatal findings, e.g. a filesystem path that is not a
+	// network mount. MoveRepository renames the repository's directory from the
+	// location in `repository` to the one in new_config_json (SFTP and
+	// filesystem only) and refuses if the destination exists.
+	TestRepository(context.Context, *TestRepositoryRequest) (*TestRepositoryResponse, error)
+	MoveRepository(context.Context, *MoveRepositoryRequest) (*MoveRepositoryResponse, error)
 	// Host filesystem sizes, for choosing what to back up.
 	PathUsage(context.Context, *PathUsageRequest) (*PathUsageResponse, error)
 	// Space a repository takes in its storage (all Kopia blobs). Lists every
@@ -367,6 +405,12 @@ func (UnimplementedAgentServer) WipeRepository(context.Context, *WipeRepositoryR
 }
 func (UnimplementedAgentServer) Maintain(context.Context, *MaintainRequest) (*MaintainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Maintain not implemented")
+}
+func (UnimplementedAgentServer) TestRepository(context.Context, *TestRepositoryRequest) (*TestRepositoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TestRepository not implemented")
+}
+func (UnimplementedAgentServer) MoveRepository(context.Context, *MoveRepositoryRequest) (*MoveRepositoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveRepository not implemented")
 }
 func (UnimplementedAgentServer) PathUsage(context.Context, *PathUsageRequest) (*PathUsageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PathUsage not implemented")
@@ -668,6 +712,42 @@ func _Agent_Maintain_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Agent_TestRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestRepositoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).TestRepository(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_TestRepository_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).TestRepository(ctx, req.(*TestRepositoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Agent_MoveRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveRepositoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).MoveRepository(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_MoveRepository_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).MoveRepository(ctx, req.(*MoveRepositoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Agent_PathUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PathUsageRequest)
 	if err := dec(in); err != nil {
@@ -788,6 +868,14 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Maintain",
 			Handler:    _Agent_Maintain_Handler,
+		},
+		{
+			MethodName: "TestRepository",
+			Handler:    _Agent_TestRepository_Handler,
+		},
+		{
+			MethodName: "MoveRepository",
+			Handler:    _Agent_MoveRepository_Handler,
 		},
 		{
 			MethodName: "PathUsage",

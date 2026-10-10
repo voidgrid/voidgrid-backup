@@ -53,6 +53,11 @@ func (e *Engine) Wipe(ctx context.Context, r Repo) (blobs, bytes int64, err erro
 	if err := r.Config.Validate(); err != nil {
 		return 0, 0, err
 	}
+	if err := noRepositoryAt(ctx, r.Config); errors.Is(err, errNoRepository) {
+		return 0, 0, errors.New("no repository was found at this location; nothing was deleted")
+	} else if err != nil {
+		return 0, 0, err
+	}
 	st, err := storage(ctx, r.Config, false)
 	if err != nil {
 		return 0, 0, err
