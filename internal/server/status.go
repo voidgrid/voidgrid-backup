@@ -26,6 +26,10 @@ type statusPage struct {
 }
 
 // worse is the more worrying of two levels.
+// statusRunWindow is how long a failed restore, check or import stays on the
+// Status page unless a later run of that kind succeeds first.
+const statusRunWindow = 7 * 24 * time.Hour
+
 func worse(a, b string) string {
 	rank := map[string]int{"muted": 0, "ok": 1, "warn": 2, "bad": 3}
 	if rank[b] > rank[a] {
@@ -105,6 +109,7 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, u.jobRow(ctx, j, agents, repos))
 	}
 	var okN, partialN, failedN, neverN, runningN int
+	var otherFailed, otherPartial int // restores, checks and imports that did not succeed lately
 	var problems []string
 	var next time.Time
 	var nextName string
@@ -123,6 +128,23 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 			problems = append(problems, row.Name+" partial "+ago(row.Last.StartedAt))
 		default:
 			okN++
+		}
+		// A restore, check or import that failed lately is a problem too, though the
+		// job's last backup was fine. It shows until a later run of that kind
+		// succeeds, or statusRunWindow passes.
+		for _, o := range row.Others {
+			if time.Since(o.StartedAt) > statusRunWindow {
+				continue
+			}
+			switch o.Status {
+			case catalog.RunFailed:
+				otherFailed++
+			case catalog.RunPartial:
+				otherPartial++
+			default:
+				continue
+			}
+			problems = append(problems, row.Name+" "+o.Kind+" "+o.Status+" "+ago(o.StartedAt))
 		}
 		if row.Enabled && !row.Next.IsZero() && (next.IsZero() || row.Next.Before(next)) {
 			next, nextName = row.Next, row.Name
@@ -148,6 +170,9 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 				parts = append(parts, fmt.Sprintf("%d never run", neverN))
 			}
 		}
+		if n := otherFailed + otherPartial; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d restore or check did not succeed", n))
+		}
 		if runningN > 0 {
 			parts = append(parts, fmt.Sprintf("%d running now", runningN))
 		}
@@ -156,9 +181,9 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 			jl.Text += " (" + some(problems) + ")"
 		}
 		switch {
-		case failedN > 0:
+		case failedN > 0 || otherFailed > 0:
 			jl.Level = "bad"
-		case partialN > 0:
+		case partialN > 0 || otherPartial > 0:
 			jl.Level = "warn"
 		}
 	}

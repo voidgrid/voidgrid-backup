@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -83,5 +84,57 @@ func TestStatusPageWithNothingSetUp(t *testing.T) {
 	page := get(t, client, srv.URL+"/", "all good")
 	if strings.Count(page, "none yet") != 3 || !strings.Contains(page, "nothing scheduled") {
 		t.Errorf("an empty system:\n%s", page)
+	}
+}
+
+// A failed restore must show where the operator looks: the Jobs list and the
+// Status page, not only the job's own Runs table. The job's last backup is fine.
+func TestFailedRestoreShowsOnJobsAndStatus(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+
+	if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil || run.Status != catalog.RunSuccess {
+		t.Fatalf("backup: %+v %v", run, err)
+	}
+	snaps, _ := c.Snapshots(ctx, job.ID)
+	target := filepath.Join(t.TempDir(), "restored")
+	if rr, err := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", target, false); err != nil || !restoreOK(rr) {
+		t.Fatalf("restore: %+v %v", rr, err)
+	}
+	page := get(t, client, srv.URL+"/", "all good")
+	if strings.Contains(page, "did not succeed") {
+		t.Errorf("a successful restore is reported as a problem:\n%s", page)
+	}
+	jobs := get(t, client, srv.URL+"/jobs", "docs")
+	if !strings.Contains(jobs, `restore <span class="success">success</span>`) {
+		t.Errorf("the Jobs list does not show the latest restore:\n%s", jobs)
+	}
+
+	// Into a non-empty target without overwrite: the restore fails.
+	if rr, _ := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", target, false); rr.Status != catalog.RunFailed {
+		t.Fatalf("expected a failed restore: %+v", rr)
+	}
+	page = get(t, client, srv.URL+"/", "Jobs")
+	for _, want := range []string{"last backups all ok", "1 restore or check did not succeed", "docs restore failed"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the status page is missing %q:\n%s", want, page)
+		}
+	}
+	jobs = get(t, client, srv.URL+"/jobs", "docs")
+	if !strings.Contains(jobs, `restore <span class="failed">failed</span>`) {
+		t.Errorf("the Jobs list does not show the failed restore:\n%s", jobs)
+	}
+
+	// A later restore that succeeds clears it.
+	other := filepath.Join(t.TempDir(), "again")
+	if rr, err := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", other, false); err != nil || !restoreOK(rr) {
+		t.Fatalf("second restore: %+v %v", rr, err)
+	}
+	page = get(t, client, srv.URL+"/", "Jobs")
+	if strings.Contains(page, "did not succeed") {
+		t.Errorf("a later success must clear the problem:\n%s", page)
 	}
 }

@@ -583,13 +583,16 @@ type jobRow struct {
 	catalog.Job
 	Agent, Repo string
 	Last        *catalog.Run
-	Next        time.Time
-	Running     bool
-	Progress    *RunProgress  // where its upload is, while it runs and its agent reports one
-	Clashes     []string      // other jobs it would run alongside in the next 24 h
-	Dur         time.Duration // how long a run is expected to take; see jobDuration
-	Longest     time.Duration // the longest of the runs Dur was taken from
-	DurGuess    bool          // Dur is a default: the job has no finished backup yet
+	// Others are the latest restore, check and import of the job, newest first.
+	// They are not part of Last, which is only about backups.
+	Others   []catalog.Run
+	Next     time.Time
+	Running  bool
+	Progress *RunProgress  // where its upload is, while it runs and its agent reports one
+	Clashes  []string      // other jobs it would run alongside in the next 24 h
+	Dur      time.Duration // how long a run is expected to take; see jobDuration
+	Longest  time.Duration // the longest of the runs Dur was taken from
+	DurGuess bool          // Dur is a default: the job has no finished backup yet
 }
 
 type jobsPage struct {
@@ -681,6 +684,12 @@ func (u *ui) jobRow(ctx context.Context, j catalog.Job, agents []catalog.Agent, 
 	if last, err := u.c.Catalog.LastRun(ctx, j.ID, "backup"); err == nil {
 		row.Last = &last
 	}
+	for _, kind := range []string{"restore", "check", "import"} {
+		if run, err := u.c.Catalog.LastRun(ctx, j.ID, kind); err == nil {
+			row.Others = append(row.Others, run)
+		}
+	}
+	slices.SortFunc(row.Others, func(a, b catalog.Run) int { return b.StartedAt.Compare(a.StartedAt) })
 	row.Dur, row.Longest, row.DurGuess = u.c.jobDuration(ctx, j.ID)
 	if j.Enabled && j.Schedule != "" {
 		row.Next, _ = NextRun(ctx, u.c.Catalog, j)
