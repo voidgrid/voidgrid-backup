@@ -367,13 +367,16 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 		req.Vm = &agentpb.VMSpec{Name: v.Name, Disks: v.Disks, Quiesce: v.Quiesce}
 	}
 	slog.Info("backup started", "job", job.Name, "trigger", trigger, "agent", agent.Name)
+	rctx, endRun := c.beginRun(ctx, jobID)
+	defer endRun()
 	stopProgress := c.pollAgentProgress(jobID, agent)
-	resp, err := withStorageSlot(ctx, c, repo, func() (*agentpb.BackupResponse, error) {
-		return withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.BackupResponse, error) {
+	resp, err := withStorageSlot(rctx, c, repo, func() (*agentpb.BackupResponse, error) {
+		return withAgentFrom(rctx, c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.BackupResponse, error) {
 			return cl.Backup(ctx, req)
 		})
 	})
 	stopProgress()
+	err = cancelledErr(rctx, err)
 	run.FinishedAt = time.Now()
 	if err != nil {
 		run.Status, run.Error = catalog.RunFailed, runError(err)
@@ -391,12 +394,13 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 }
 
 // notifyOnFailure sends run through whatever notification channels are
-// configured, but only for a scheduled run that didn't fully succeed: a
-// manual run is one the operator is already watching in the UI, and a
-// success needs no attention. A missing or disabled configuration is a
-// silent no-op, not an error.
+// configured. A scheduled run notifies only when it didn't fully succeed. A run
+// somebody started by hand notifies whatever its outcome, success included:
+// a restore or a check can run for hours, and nobody is expected to watch the
+// page for that long. A missing or disabled configuration is a silent no-op,
+// not an error.
 func (c *Controller) notifyOnFailure(ctx context.Context, jobName string, run catalog.Run) {
-	if run.Trigger != "schedule" || run.Status == catalog.RunSuccess {
+	if run.Trigger == "schedule" && run.Status == catalog.RunSuccess {
 		return
 	}
 	cfg, err := c.NotifyConfig(ctx)
@@ -480,7 +484,7 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 	}
 	defer c.inflight.done(jobID)
 
-	_, repo, agent, err := c.jobContext(ctx, jobID)
+	job, repo, agent, err := c.jobContext(ctx, jobID)
 	if err != nil {
 		return catalog.Run{}, err
 	}
@@ -489,8 +493,10 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 		return catalog.Run{}, err
 	}
 	slog.Info("check started", "job", jobID, "agent", agent.Name)
-	resp, err := withStorageSlot(ctx, c, repo, func() (*agentpb.CheckResponse, error) {
-		return withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.CheckResponse, error) {
+	rctx, endRun := c.beginRun(ctx, jobID)
+	defer endRun()
+	resp, err := withStorageSlot(rctx, c, repo, func() (*agentpb.CheckResponse, error) {
+		return withAgentFrom(rctx, c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.CheckResponse, error) {
 			return cl.Check(ctx, &agentpb.CheckRequest{
 				Repository:          toProtoRepo(repo, agent.ID),
 				VerifyPercent:       checkVerifyPercent,
@@ -498,6 +504,7 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 			})
 		})
 	})
+	err = cancelledErr(rctx, err)
 	run.FinishedAt = time.Now()
 	if err != nil {
 		run.Status, run.Error = catalog.RunFailed, runError(err)
@@ -508,6 +515,7 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 		slog.Error("record run", "job", jobID, "err", ferr)
 	}
 	slog.Info("check finished", "job", jobID, "status", run.Status, "summary", run.Summary, "err", run.Error)
+	c.notifyOnFailure(context.WithoutCancel(ctx), job.Name, run)
 	return run, nil
 }
 
@@ -637,7 +645,9 @@ func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path,
 	if run.ID, err = c.Catalog.StartRun(ctx, jobID, run.Kind, run.Trigger, run.StartedAt); err != nil {
 		return catalog.Run{}, err
 	}
-	resp, err := runOn(c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
+	rctx, endRun := c.beginRun(ctx, jobID)
+	defer endRun()
+	resp, err := runOnFrom(rctx, c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
 		st, err := c.Engine.Restore(ctx, er, snapshotID, path, target, overwrite)
 		return restoreResponse(st), err
 	}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
@@ -645,6 +655,7 @@ func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path,
 			Repository: toProtoRepo(repo, agent.ID), SnapshotId: snapshotID, Path: path, Target: target, Overwrite: overwrite,
 		})
 	})
+	err = cancelledErr(rctx, err)
 	run.FinishedAt = time.Now()
 	what := "/" + strings.Trim(path, "/")
 	if err != nil {
@@ -661,6 +672,7 @@ func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path,
 	if ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run); ferr != nil {
 		slog.Error("record run", "job", jobID, "err", ferr)
 	}
+	c.notifyOnFailure(context.WithoutCancel(ctx), job.Name, run)
 	return run, nil
 }
 
@@ -714,13 +726,19 @@ func (c *Controller) jobContext(ctx context.Context, jobID string) (catalog.Job,
 // withAgent dials the agent and runs call with its own deadline, detached
 // from ctx's cancellation so a closed browser tab can't abort a backup.
 func withAgent[T any](c *Controller, a catalog.Agent, timeout time.Duration, call func(context.Context, agentpb.AgentClient) (T, error)) (T, error) {
+	return withAgentFrom(context.Background(), c, a, timeout, call)
+}
+
+// withAgentFrom is withAgent for a run that can be cancelled: the call ends
+// when parent does.
+func withAgentFrom[T any](parent context.Context, c *Controller, a catalog.Agent, timeout time.Duration, call func(context.Context, agentpb.AgentClient) (T, error)) (T, error) {
 	var zero T
 	conn, err := c.dialAgent(a)
 	if err != nil {
 		return zero, err
 	}
 	defer tidy.CloseWarn("connection to the agent", conn)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	return call(ctx, agentpb.NewAgentClient(conn))
 }

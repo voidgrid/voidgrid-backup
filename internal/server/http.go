@@ -107,6 +107,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /jobs", u.addJob)
 	mux.HandleFunc("GET /jobs/{id}", u.job)
 	mux.HandleFunc("POST /jobs/{id}/run", u.runJob)
+	mux.HandleFunc("POST /jobs/{id}/cancel", u.cancelRun)
 	mux.HandleFunc("POST /jobs/{id}/schedule", u.setSchedule)
 	mux.HandleFunc("POST /jobs/{id}/schedule/move", u.moveSchedule)
 	mux.HandleFunc("POST /jobs/{id}/check", u.checkJob)
@@ -815,6 +816,24 @@ func listBack(r *http.Request, fallback string) string {
 		}
 	}
 	return "/jobs"
+}
+
+// cancelRun stops the backup, check or restore running for a job. It ends as a
+// failed run and notifies like any other.
+func (u *ui) cancelRun(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	job, err := u.c.Catalog.Job(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	back := listBack(r, "/jobs/"+id)
+	who, _ := u.c.Auth().CurrentUser(r)
+	if err := u.c.CancelRun(id, who); err != nil {
+		redirectNotice(w, r, back, "Not cancelled: "+err.Error())
+		return
+	}
+	redirectNotice(w, r, back, "Cancelling "+job.Name+". The run ends as failed, with the reason, and is announced like any other.")
 }
 
 // setSchedule changes only the schedule of a job, from the Jobs list.

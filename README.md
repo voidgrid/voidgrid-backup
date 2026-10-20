@@ -64,7 +64,7 @@ docker compose up -d
 Signing in is always required — the first visit is to `/setup` (a token printed in the server's log) to generate 10 one-time recovery codes before anything else works, the same idea as a TOTP app's backup codes. The wizard also lets you configure OIDC right there (or later, from the **Authentication** page), so you can sign in via a provider you already run or trust; without one, a recovery code is the only way in, not a fallback.
 Changes to OIDC take effect immediately, no restart. `VB_OIDC_*` (in [examples/server/.env.example](examples/server/.env.example)) also works and always wins over whatever's set through the UI. See [docs/server.md#authentication](docs/server.md#authentication).
 
-The Notifications page (Discord webhook, [Notifarr](https://notifiarr.com/), or email) sends when a **scheduled** job finishes partial or failed. See [docs/server.md#notifications](docs/server.md#notifications).
+The Notifications page (Discord webhook, [Notifarr](https://notifiarr.com/), or email) sends when a **scheduled** backup finishes partial or failed (a success is silent), and for every backup, check or restore started by hand, whatever its outcome. See [docs/server.md#notifications](docs/server.md#notifications).
 
 Both containers have health checks (`voidgrid-backup-server healthcheck`, `voidgrid-backup-agent healthcheck`), and every setting is a flag or an `VB_*` environment variable.
 

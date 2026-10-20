@@ -83,7 +83,7 @@ func (c Config) Enabled() bool {
 type Event struct {
 	Job     string // job name
 	Kind    string // "backup", "check", "restore"
-	Status  string // catalog.RunPartial or catalog.RunFailed; Send doesn't send on success
+	Status  string // catalog.RunSuccess, RunPartial or RunFailed
 	Summary string
 	Error   string
 	JobID   string // for building the link back, if Config.URL is set
@@ -220,10 +220,14 @@ func sendDiscord(ctx context.Context, cfg Config, ev Event) (string, error) {
 	const (
 		colorRed    = 0xb3261e // failed
 		colorYellow = 0xe0c050 // partial
+		colorGreen  = 0x2e7d32 // success, for a run started by hand
 	)
 	color := colorYellow
-	if ev.Status == "failed" {
+	switch ev.Status {
+	case "failed":
 		color = colorRed
+	case "success":
+		color = colorGreen
 	}
 	payload := map[string]any{
 		"embeds": []map[string]any{{

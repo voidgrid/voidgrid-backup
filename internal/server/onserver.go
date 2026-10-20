@@ -35,14 +35,21 @@ func (c *Controller) ServerCanOpen(repo catalog.Repository) error {
 func runOn[T any](c *Controller, a catalog.Agent, repo catalog.Repository, timeout time.Duration,
 	local func(context.Context, engine.Repo) (T, error),
 	remote func(context.Context, agentpb.AgentClient) (T, error)) (T, error) {
+	return runOnFrom(context.Background(), c, a, repo, timeout, local, remote)
+}
+
+// runOnFrom is runOn for a run that can be cancelled: it ends when parent does.
+func runOnFrom[T any](parent context.Context, c *Controller, a catalog.Agent, repo catalog.Repository, timeout time.Duration,
+	local func(context.Context, engine.Repo) (T, error),
+	remote func(context.Context, agentpb.AgentClient) (T, error)) (T, error) {
 	var zero T
-	release, err := c.storageSlot(context.Background(), repo)
+	release, err := c.storageSlot(parent, repo)
 	if err != nil {
 		return zero, err
 	}
 	defer release()
 	if a.ID != ServerHost {
-		return withAgent(c, a, timeout, remote)
+		return withAgentFrom(parent, c, a, timeout, remote)
 	}
 	if c.Engine == nil {
 		return zero, errors.New("this server has no repository engine")
@@ -51,7 +58,7 @@ func runOn[T any](c *Controller, a catalog.Agent, repo catalog.Repository, timeo
 	if err != nil {
 		return zero, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	return local(ctx, er)
 }

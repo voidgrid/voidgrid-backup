@@ -1,7 +1,8 @@
 {{define "notifications"}}{{template "top" .}}
   <h2>Notifications</h2>
-  <p class="hint">Sent only for a <strong>scheduled</strong> job that finishes partial or failed &mdash; a manual run
-    is one you're already watching, and a success needs no attention. Leave a secret field (webhook URL, API key,
+  <p class="hint">A <strong>scheduled</strong> backup sends only when it finishes partial or failed; a success needs no attention.
+    A backup, check or restore you start <strong>by hand</strong> sends whatever its outcome, success included &mdash;
+    a restore can run for hours and nobody should have to watch the page. Leave a secret field (webhook URL, API key,
     password) blank when saving to keep whatever is already stored for that channel; uncheck "enabled" to turn a
     channel off without losing its settings.</p>
 

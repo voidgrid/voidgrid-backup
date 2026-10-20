@@ -815,10 +815,19 @@ Both of these only suggest; nothing changes until you save or press Apply.
 
 ### Notifications
 
-One server-wide setting, not per-job: a **scheduled** job that finishes
-`partial` or `failed` is sent to whichever of these are enabled. A manual
-run never notifies — you're already watching it in the UI — and neither
-does a success.
+One server-wide setting, not per-job, sent to whichever of these are enabled:
+
+- A **scheduled** backup sends only when it finishes `partial` or `failed`. A
+  success is silent.
+- A backup, check or restore you start **by hand** sends whatever its outcome,
+  success included. A restore can run for hours, and nobody is expected to
+  watch the page that long.
+- Maintenance failures are not sent yet; they show on the Repositories page.
+
+A run in progress has a **Cancel** button, on the Jobs list and the job page. It
+stops the work (an agent resumes the containers it paused and merges a VM's
+disk overlay back), and the run ends as `failed` with the reason "cancelled by
+<user>", which sends an alert like any other failure.
 
 | Channel | What it needs |
 |---|---|

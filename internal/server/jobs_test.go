@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -135,7 +136,7 @@ func TestRestoreOnAnotherAgent(t *testing.T) {
 	}
 }
 
-func TestNotifyOnScheduledFailureOnly(t *testing.T) {
+func TestNotifyOnEveryFailure(t *testing.T) {
 	ctx := context.Background()
 	c, job, src := setupJob(t)
 
@@ -157,14 +158,14 @@ func TestNotifyOnScheduledFailureOnly(t *testing.T) {
 	if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil || run.Status != catalog.RunFailed {
 		t.Fatalf("manual run: %+v %v", run, err)
 	}
-	if posts != 0 {
-		t.Fatalf("manual failure notified: %d posts", posts)
+	if posts != 1 {
+		t.Fatalf("a manual failure must notify too: %d posts", posts)
 	}
 
 	if run, err := c.RunJob(ctx, job.ID, "schedule"); err != nil || run.Status != catalog.RunFailed {
 		t.Fatalf("scheduled run: %+v %v", run, err)
 	}
-	if posts != 1 {
+	if posts != 2 {
 		t.Fatalf("scheduled failure did not notify: %d posts", posts)
 	}
 }
@@ -308,5 +309,99 @@ func TestPagesRender(t *testing.T) {
 	}
 	if runs, _ := c.Catalog.ListRuns(ctx, job.ID, 10); len(runs) != 1 {
 		t.Fatalf("a refused restore created a run: %+v", runs)
+	}
+}
+
+// A restore is started by hand and can take hours, so its failure must alert
+// like a scheduled backup's.
+func TestNotifyWhenARestoreFails(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	var posts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	if err := c.SetNotifyConfig(ctx, notify.Config{Discord: &notify.DiscordConfig{Enabled: true, WebhookURL: srv.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	if run, err := c.RunJob(ctx, job.ID, "schedule"); err != nil || run.Status != catalog.RunSuccess {
+		t.Fatalf("backup: %+v %v", run, err)
+	}
+	snaps, _ := c.Snapshots(ctx, job.ID)
+	target := filepath.Join(t.TempDir(), "restored")
+	before := posts
+	if rr, err := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", target, false); err != nil || !restoreOK(rr) {
+		t.Fatalf("restore: %+v %v", rr, err)
+	}
+	if posts != before+1 {
+		t.Fatalf("a manual restore that succeeded did not notify: %d posts", posts)
+	}
+	// Into a non-empty target without overwrite: it fails.
+	if rr, _ := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", target, false); rr.Status != catalog.RunFailed {
+		t.Fatalf("expected a failed restore: %+v", rr)
+	}
+	if posts != before+2 {
+		t.Fatalf("a failed manual restore did not notify: %d posts", posts)
+	}
+}
+
+func TestCancelRunStopsARestoreAndReportsIt(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	if err := c.CancelRun(job.ID, "me"); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("cancelling nothing: %v", err)
+	}
+	// beginRun and CancelRun are what every run goes through.
+	rctx, end := c.beginRun(ctx, job.ID)
+	if err := c.CancelRun(job.ID, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if rctx.Err() == nil {
+		t.Fatal("the run's context was not cancelled")
+	}
+	err := cancelledErr(rctx, context.Canceled)
+	if err == nil || err.Error() != "cancelled by alice" {
+		t.Fatalf("cancelledErr = %v", err)
+	}
+	if got := runError(err); got != "cancelled by alice" {
+		t.Fatalf("recorded as %q", got)
+	}
+	end()
+	if err := c.CancelRun(job.ID, "alice"); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("a finished run must not be cancellable: %v", err)
+	}
+	// A run that ends on its own keeps its own error.
+	rctx2, end2 := c.beginRun(ctx, job.ID)
+	defer end2()
+	if err := cancelledErr(rctx2, errors.New("disk full")); err == nil || err.Error() != "disk full" {
+		t.Fatalf("unrelated error replaced: %v", err)
+	}
+}
+
+func TestNotifyOnManualSuccess(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	var posts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	if err := c.SetNotifyConfig(ctx, notify.Config{Discord: &notify.DiscordConfig{Enabled: true, WebhookURL: srv.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	if run, err := c.RunJob(ctx, job.ID, "schedule"); err != nil || run.Status != catalog.RunSuccess {
+		t.Fatalf("scheduled run: %+v %v", run, err)
+	}
+	if posts != 0 {
+		t.Fatalf("a scheduled success notified: %d posts", posts)
+	}
+	if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil || run.Status != catalog.RunSuccess {
+		t.Fatalf("manual run: %+v %v", run, err)
+	}
+	if posts != 1 {
+		t.Fatalf("a manual success must notify: %d posts", posts)
 	}
 }

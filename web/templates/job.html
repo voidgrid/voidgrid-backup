@@ -6,6 +6,7 @@
     <form method="post" action="/jobs/{{$job.ID}}/run" class="row" style="flex-wrap:nowrap;gap:10px"><button type="submit" {{if $job.Running}}disabled{{end}}>Back up now</button>
       <label class="check" style="white-space:nowrap" title="After the backup, run a full maintenance cycle on its repository even if none is due. It holds the agent until it finishes. Skipped if the backup fails."><input type="checkbox" name="maintain" value="1"> then run maintenance</label></form>
     <form method="post" action="/jobs/{{$job.ID}}/check"><button class="plain" type="submit" {{if $job.Running}}disabled{{end}}>Verify repository</button></form>
+    {{if $job.Running}}<form method="post" action="/jobs/{{$job.ID}}/cancel" onsubmit="return confirm('Cancel the run in progress? It ends as failed and an alert is sent.')"><button class="plain" type="submit">Cancel</button></form>{{end}}
     {{if not $job.Running}}<a href="/jobs/{{$job.ID}}/edit"><button class="plain" type="button">Edit</button></a>{{end}}
     <form method="post" action="/jobs/{{$job.ID}}/toggle"><button class="plain" type="submit">{{if $job.Enabled}}Disable schedule{{else}}Enable schedule{{end}}</button></form>
     {{if not $job.Running}}

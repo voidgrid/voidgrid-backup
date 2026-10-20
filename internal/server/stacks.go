@@ -88,13 +88,13 @@ func (c *Controller) RestoreStack(ctx context.Context, jobID, onID, snapshotID, 
 			return catalog.Run{}, err
 		}
 	}
-	return c.stackOp(ctx, jobID, onID, targetRoot == "", "restore", func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
+	return c.stackOp(ctx, jobID, onID, targetRoot == "", "restore", func(rctx context.Context, repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
 		where := "original locations"
 		if targetRoot != "" {
 			where = targetRoot
 		}
 		run.Summary = fmt.Sprintf("restore stack %s from %s to %s%s", job.Stack.Project, shortID(snapshotID), where, onHost(job, agent))
-		resp, err := runOn(c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
+		resp, err := runOnFrom(rctx, c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
 			// A directory restore needs no Docker; only an in-place one does,
 			// and that never runs on the server (jobOp refuses it).
 			st, err := c.Engine.RestoreStack(ctx, er, nil, snapshotID, targetRoot, stopStack)
@@ -116,9 +116,9 @@ func (c *Controller) RestoreStack(ctx context.Context, jobID, onID, snapshotID, 
 // ImportDump loads a service's database dump from a stack snapshot into the
 // running container, recorded as a run.
 func (c *Controller) ImportDump(ctx context.Context, jobID, snapshotID, service string) (catalog.Run, error) {
-	return c.stackOp(ctx, jobID, "", false, "import", func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
+	return c.stackOp(ctx, jobID, "", false, "import", func(rctx context.Context, repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
 		run.Summary = fmt.Sprintf("import %s dump from %s", service, shortID(snapshotID))
-		resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ImportDumpResponse, error) {
+		resp, err := withAgentFrom(rctx, c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ImportDumpResponse, error) {
 			return cl.ImportDump(ctx, &agentpb.ImportDumpRequest{Repository: toProtoRepo(repo, agent.ID), SnapshotId: snapshotID, Service: service})
 		})
 		if err != nil {
@@ -131,13 +131,17 @@ func (c *Controller) ImportDump(ctx context.Context, jobID, snapshotID, service 
 	})
 }
 
-func (c *Controller) stackOp(ctx context.Context, jobID, onID string, inPlace bool, kind string, op func(catalog.Repository, catalog.Agent, catalog.Job, *catalog.Run) error) (catalog.Run, error) {
+func (c *Controller) stackOp(ctx context.Context, jobID, onID string, inPlace bool, kind string, op jobOpFunc) (catalog.Run, error) {
 	return c.jobOp(ctx, jobID, onID, inPlace, kind, catalog.JobStack, op)
 }
 
 // jobOp runs a manual operation on a job of jobKind and records it as a run.
 // It runs on the job's agent, or on onID. inPlace says op changes the original locations, which only the job's own agent may do.
-func (c *Controller) jobOp(ctx context.Context, jobID, onID string, inPlace bool, kind, jobKind string, op func(catalog.Repository, catalog.Agent, catalog.Job, *catalog.Run) error) (catalog.Run, error) {
+// jobOpFunc is the work of a manual operation on a job. ctx ends when the run
+// is cancelled.
+type jobOpFunc func(ctx context.Context, repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error
+
+func (c *Controller) jobOp(ctx context.Context, jobID, onID string, inPlace bool, kind, jobKind string, op jobOpFunc) (catalog.Run, error) {
 	if !c.inflight.start(jobID) {
 		return catalog.Run{}, ErrRunning
 	}
@@ -159,7 +163,9 @@ func (c *Controller) jobOp(ctx context.Context, jobID, onID string, inPlace bool
 	if run.ID, err = c.Catalog.StartRun(ctx, jobID, kind, run.Trigger, run.StartedAt); err != nil {
 		return catalog.Run{}, err
 	}
-	err = op(repo, agent, job, &run)
+	rctx, endRun := c.beginRun(ctx, jobID)
+	defer endRun()
+	err = cancelledErr(rctx, op(rctx, repo, agent, job, &run))
 	run.FinishedAt = time.Now()
 	switch {
 	case err != nil:
@@ -169,7 +175,9 @@ func (c *Controller) jobOp(ctx context.Context, jobID, onID string, inPlace bool
 	default:
 		run.Status = catalog.RunSuccess
 	}
-	if ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run); ferr != nil {
+	ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run)
+	c.notifyOnFailure(context.WithoutCancel(ctx), job.Name, run)
+	if ferr != nil {
 		return run, ferr
 	}
 	return run, nil

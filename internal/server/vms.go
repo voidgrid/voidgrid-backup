@@ -51,13 +51,13 @@ func (c *Controller) RestoreVM(ctx context.Context, jobID, onID, snapshotID, tar
 			return catalog.Run{}, err
 		}
 	}
-	return c.jobOp(ctx, jobID, onID, targetDir == "", "restore", catalog.JobVM, func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
+	return c.jobOp(ctx, jobID, onID, targetDir == "", "restore", catalog.JobVM, func(rctx context.Context, repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
 		where := "its original disk paths"
 		if targetDir != "" {
 			where = targetDir
 		}
 		run.Summary = fmt.Sprintf("restore VM %s from %s to %s%s", job.VM.Name, shortID(snapshotID), where, onHost(job, agent))
-		resp, err := runOn(c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
+		resp, err := runOnFrom(rctx, c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
 			// Into a directory the hypervisor is not used; in place never runs here.
 			st, err := c.Engine.RestoreVM(ctx, er, nil, snapshotID, targetDir, define)
 			return restoreResponse(st), err

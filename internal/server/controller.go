@@ -61,7 +61,8 @@ type Controller struct {
 	usage    usageCache
 	browse   browseCache
 	gate     repoGate
-	conns    connSlots // simultaneous connections per SFTP host
+	cancels  runCancels // the Cancel button for runs in progress
+	conns    connSlots  // simultaneous connections per SFTP host
 	// snapLocks holds a *sync.Mutex per job ID; see snapLock.
 	snapLocks sync.Map
 }
