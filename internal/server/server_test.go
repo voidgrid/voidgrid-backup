@@ -9,6 +9,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -47,7 +48,18 @@ func startAgentWithDocker(t *testing.T, dir, dockerSocket string) (*agent.Agent,
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(a.TLSConfig())), grpc.UnaryInterceptor(a.Interceptor))
 	agentpb.RegisterAgentServer(s, a)
 	go func() { tidy.Check("serve the test agent", s.Serve(lis)) }()
-	t.Cleanup(s.Stop)
+	t.Cleanup(func() {
+		s.Stop()
+		// Kopia's cache tasks can still be writing under dir for a moment after
+		// the last call returns, which fails TempDir's single RemoveAll attempt
+		// ("directory not empty"). Clear it here first, retrying.
+		for i := 0; i < 50; i++ {
+			if os.RemoveAll(dir) == nil {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	})
 	return a, lis.Addr().String()
 }
 
