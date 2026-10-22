@@ -5,7 +5,7 @@
       <table>
         <tbody>
         {{range .Lines}}
-          <tr><td class="muted">{{.Label}}</td><td><a class="{{.Level}}" href="{{.Href}}">{{.Text}}</a></td></tr>
+          <tr><td class="muted">{{.Label}}</td><td><a class="{{.Level}}" href="{{.Href}}">{{.Text}}</a>{{if .Ack}} <form class="inline" method="post" action="{{.Ack}}"><input type="hidden" name="back" value="/"><button class="plain" type="submit">Acknowledge</button></form>{{end}}</td></tr>
         {{end}}
         </tbody>
       </table>

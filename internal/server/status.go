@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,6 +17,7 @@ type statusLine struct {
 	Text  string
 	Level string // "ok", "warn", "bad" or "muted"
 	Href  string
+	Ack   string // when set, a button that posts here to acknowledge the problem
 }
 
 type statusPage struct {
@@ -26,10 +28,6 @@ type statusPage struct {
 }
 
 // worse is the more worrying of two levels.
-// statusRunWindow is how long a failed restore, check or import stays on the
-// Status page unless a later run of that kind succeeds first.
-const statusRunWindow = 7 * 24 * time.Hour
-
 func worse(a, b string) string {
 	rank := map[string]int{"muted": 0, "ok": 1, "warn": 2, "bad": 3}
 	if rank[b] > rank[a] {
@@ -109,7 +107,7 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, u.jobRow(ctx, j, agents, repos))
 	}
 	var okN, partialN, failedN, neverN, runningN int
-	var otherFailed, otherPartial int // restores, checks and imports that did not succeed lately
+	var attn []statusLine // restores, checks and imports that did not succeed and nobody has acknowledged
 	var problems []string
 	var next time.Time
 	var nextName string
@@ -129,22 +127,17 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 		default:
 			okN++
 		}
-		// A restore, check or import that failed lately is a problem too, though the
-		// job's last backup was fine. It shows until a later run of that kind
-		// succeeds, or statusRunWindow passes.
-		for _, o := range row.Others {
-			if time.Since(o.StartedAt) > statusRunWindow {
-				continue
+		// A restore, check or import that did not succeed is a problem too, though
+		// the job's last backup was fine. It shows until a later run of that kind
+		// succeeds or someone acknowledges it.
+		for _, o := range u.attention(ctx, row.ID) {
+			lvl := "warn"
+			if o.Status == catalog.RunFailed {
+				lvl = "bad"
 			}
-			switch o.Status {
-			case catalog.RunFailed:
-				otherFailed++
-			case catalog.RunPartial:
-				otherPartial++
-			default:
-				continue
-			}
-			problems = append(problems, row.Name+" "+o.Kind+" "+o.Status+" "+ago(o.StartedAt))
+			attn = append(attn, statusLine{Label: strings.ToUpper(o.Kind[:1]) + o.Kind[1:], Level: lvl,
+				Text: fmt.Sprintf("%s of %s %s %s", o.Kind, row.Name, o.Status, ago(o.StartedAt)),
+				Href: "/jobs/" + row.ID, Ack: fmt.Sprintf("/jobs/%s/runs/%d/ack", row.ID, o.ID)})
 		}
 		if row.Enabled && !row.Next.IsZero() && (next.IsZero() || row.Next.Before(next)) {
 			next, nextName = row.Next, row.Name
@@ -170,9 +163,6 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 				parts = append(parts, fmt.Sprintf("%d never run", neverN))
 			}
 		}
-		if n := otherFailed + otherPartial; n > 0 {
-			parts = append(parts, fmt.Sprintf("%d restore or check did not succeed", n))
-		}
 		if runningN > 0 {
 			parts = append(parts, fmt.Sprintf("%d running now", runningN))
 		}
@@ -181,9 +171,9 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 			jl.Text += " (" + some(problems) + ")"
 		}
 		switch {
-		case failedN > 0 || otherFailed > 0:
+		case failedN > 0:
 			jl.Level = "bad"
-		case partialN > 0 || otherPartial > 0:
+		case partialN > 0:
 			jl.Level = "warn"
 		}
 	}
@@ -226,7 +216,7 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 		nl.Text, nl.Level = whenStr(next)+" · "+nextName, "ok"
 	}
 
-	p := statusPage{base: u.newBase("Status", "home", r), Lines: []statusLine{al, jl, rl, nl}}
+	p := statusPage{base: u.newBase("Status", "home", r), Lines: append(append([]statusLine{al, jl}, attn...), rl, nl)}
 	p.Level = "ok"
 	attention := 0
 	for _, l := range p.Lines {
@@ -244,4 +234,21 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 		p.Summary = fmt.Sprintf("%d things need attention", attention)
 	}
 	u.render(w, http.StatusOK, "status", p)
+}
+
+// attention is the latest restore, check and import of a job that did not
+// succeed and that nobody has acknowledged. A later success of the same kind
+// replaces it.
+func (u *ui) attention(ctx context.Context, jobID string) []catalog.Run {
+	var out []catalog.Run
+	for _, kind := range []string{"restore", "check", "import"} {
+		run, err := u.c.Catalog.LastRun(ctx, jobID, kind)
+		if err != nil || !run.AckedAt.IsZero() {
+			continue
+		}
+		if run.Status == catalog.RunFailed || run.Status == catalog.RunPartial {
+			out = append(out, run)
+		}
+	}
+	return out
 }

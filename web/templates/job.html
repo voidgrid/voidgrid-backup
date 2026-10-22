@@ -62,7 +62,7 @@
           <td>{{when .StartedAt}}</td>
           <td>{{.Kind}}</td>
           <td>{{.Trigger}}</td>
-          <td><span class="{{.Status}}">{{.Status}}</span></td>
+          <td>{{if .AckedAt.IsZero}}<span class="{{.Status}}">{{.Status}}</span>{{if and (ne .Kind "backup") (or (eq .Status "failed") (eq .Status "partial"))}} <form class="inline" method="post" action="/jobs/{{$job.ID}}/runs/{{.ID}}/ack"><button class="plain" type="submit">Acknowledge</button></form>{{end}}{{else}}<span class="muted" title="acknowledged by {{.AckedBy}} {{when .AckedAt}}">{{.Status}} (acknowledged)</span>{{end}}</td>
           <td>{{tookRun .}}{{if .Queued}} <span class="muted" title="waited for the agent to finish earlier work">(queued {{.Queued.Round 1000000000}})</span>{{end}}</td>
           <td class="wrap">{{.Summary}}</td>
         </tr>

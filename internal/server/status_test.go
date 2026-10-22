@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -89,7 +92,7 @@ func TestStatusPageWithNothingSetUp(t *testing.T) {
 
 // A failed restore must show where the operator looks: the Jobs list and the
 // Status page, not only the job's own Runs table. The job's last backup is fine.
-func TestFailedRestoreShowsOnJobsAndStatus(t *testing.T) {
+func TestFailedRestoreShowsOnStatusUntilAcknowledged(t *testing.T) {
 	ctx := context.Background()
 	c, job, _ := setupJob(t)
 	srv := httptest.NewServer(NewHandler(c))
@@ -105,12 +108,12 @@ func TestFailedRestoreShowsOnJobsAndStatus(t *testing.T) {
 		t.Fatalf("restore: %+v %v", rr, err)
 	}
 	page := get(t, client, srv.URL+"/", "all good")
-	if strings.Contains(page, "did not succeed") {
+	if strings.Contains(page, "Acknowledge") {
 		t.Errorf("a successful restore is reported as a problem:\n%s", page)
 	}
-	jobs := get(t, client, srv.URL+"/jobs", "docs")
-	if !strings.Contains(jobs, `restore <span class="success">success</span>`) {
-		t.Errorf("the Jobs list does not show the latest restore:\n%s", jobs)
+	// The Jobs list is about backups only.
+	if jobs := get(t, client, srv.URL+"/jobs", "docs"); strings.Contains(jobs, "restore <span") {
+		t.Errorf("the Jobs list shows a restore:\n%s", jobs)
 	}
 
 	// Into a non-empty target without overwrite: the restore fails.
@@ -118,23 +121,49 @@ func TestFailedRestoreShowsOnJobsAndStatus(t *testing.T) {
 		t.Fatalf("expected a failed restore: %+v", rr)
 	}
 	page = get(t, client, srv.URL+"/", "Jobs")
-	for _, want := range []string{"last backups all ok", "1 restore or check did not succeed", "docs restore failed"} {
+	for _, want := range []string{"last backups all ok", "restore of docs failed", "Acknowledge"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the status page is missing %q:\n%s", want, page)
 		}
 	}
-	jobs = get(t, client, srv.URL+"/jobs", "docs")
-	if !strings.Contains(jobs, `restore <span class="failed">failed</span>`) {
-		t.Errorf("the Jobs list does not show the failed restore:\n%s", jobs)
+	failed, err := c.Catalog.LastRun(ctx, job.ID, "restore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobPage := get(t, client, srv.URL+"/jobs/"+job.ID, "Runs")
+	if !strings.Contains(jobPage, "/runs/"+strconv.FormatInt(failed.ID, 10)+"/ack") {
+		t.Errorf("the job page offers no Acknowledge for the failed restore:\n%s", jobPage)
 	}
 
-	// A later restore that succeeds clears it.
+	// Acknowledging removes it from Status and keeps the run.
+	post(t, client, srv.URL+"/jobs/"+job.ID+"/runs/"+strconv.FormatInt(failed.ID, 10)+"/ack", url.Values{"back": {"/"}})
+	page = get(t, client, srv.URL+"/", "Jobs")
+	if strings.Contains(page, "restore of docs failed") || strings.Contains(page, "Acknowledge") {
+		t.Errorf("an acknowledged restore still counts:\n%s", page)
+	}
+	if got, _ := c.Catalog.LastRun(ctx, job.ID, "restore"); got.AckedAt.IsZero() || got.Status != catalog.RunFailed {
+		t.Errorf("the run after acknowledging: %+v", got)
+	}
+	if err := c.Catalog.AckRun(ctx, job.ID, failed.ID, "x", time.Now()); !errors.Is(err, catalog.ErrNotFound) {
+		t.Errorf("acknowledging twice: %v", err)
+	}
+	backup, _ := c.Catalog.LastRun(ctx, job.ID, "backup")
+	if err := c.Catalog.AckRun(ctx, job.ID, backup.ID, "x", time.Now()); !errors.Is(err, catalog.ErrNotFound) {
+		t.Errorf("a backup must not be acknowledgeable: %v", err)
+	}
+
+	// The next failure counts again, and a later success clears it unacknowledged.
+	if rr, _ := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", target, false); rr.Status != catalog.RunFailed {
+		t.Fatalf("expected a second failed restore: %+v", rr)
+	}
+	if page = get(t, client, srv.URL+"/", "Jobs"); !strings.Contains(page, "restore of docs failed") {
+		t.Errorf("a new failure must show again:\n%s", page)
+	}
 	other := filepath.Join(t.TempDir(), "again")
 	if rr, err := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", other, false); err != nil || !restoreOK(rr) {
 		t.Fatalf("second restore: %+v %v", rr, err)
 	}
-	page = get(t, client, srv.URL+"/", "Jobs")
-	if strings.Contains(page, "did not succeed") {
+	if page = get(t, client, srv.URL+"/", "Jobs"); strings.Contains(page, "Acknowledge") {
 		t.Errorf("a later success must clear the problem:\n%s", page)
 	}
 }

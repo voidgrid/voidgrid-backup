@@ -230,14 +230,19 @@ The home page (`/`) is the one place to see whether everything is fine, in four
 short lines, each a link to the page behind it: **Agents** (how many are
 reachable, which are not, how many are waiting for approval), **Jobs** (the
 result of each job's last backup, with the names of failed and partial ones and
-how many are running now. A restore, check or dump import that failed or was
-partial in the last 7 days counts too, even when the job's last backup was
-fine, and stays until a later run of that kind succeeds), **Repositories** (whether maintenance last
+how many are running now), **Repositories** (whether maintenance last
 succeeded, and any that are not set up) and **Next backup** (the soonest
 scheduled start). A line turns amber or red when something needs attention, and
 the heading says how many do. The page only reads the server's own records, so
 it never waits on an agent or a repository, and it refreshes itself every 20
 seconds. The agent list is at `/agents`.
+
+A restore, check or dump import that failed or was partial gets its own line
+under Jobs (`restore of web failed 35h ago`), even when the job's last backup
+was fine. It stays until a later run of that kind succeeds, or until someone
+presses **Acknowledge** on the line or on the run in the job's page. An
+acknowledged run no longer counts and is shown in grey with who acknowledged
+it; the next failure counts again. Backups cannot be acknowledged.
 
 ### Agents
 
@@ -644,9 +649,9 @@ weekly/monthly/annual):
   [agent.md](agent.md#compose-stacks).
 - **VM job** (agent → VMs): one libvirt domain. See [agent.md](agent.md#virtual-machines).
 
-The result column of the Jobs list is the job's last backup. Under it, in grey,
-are the latest restore, check and dump import of that job with their result and
-age, so a failed restore is visible without opening the job.
+The result column of the Jobs list is the job's last backup only. Restores,
+checks and dump imports are in the Runs table of the job's page, and a failed
+one is flagged on the Status page until it is acknowledged.
 
 While a job runs, its row and its page show where the upload is, for example
 `running 34% · 23 GiB of 68 GiB · …/library/2024`; before Kopia has sized the

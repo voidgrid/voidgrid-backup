@@ -87,6 +87,8 @@ type Run struct {
 	Files      int           `json:"files"`
 	Summary    string        `json:"summary"`
 	Error      string        `json:"error"`
+	AckedAt    time.Time     `json:"acked_at"` // zero until someone acknowledges a failed or partial run
+	AckedBy    string        `json:"acked_by"`
 }
 
 // Repositories
@@ -349,7 +351,7 @@ func (c *Catalog) FailInterruptedRuns(ctx context.Context, at time.Time) (int64,
 	return res.RowsAffected()
 }
 
-const runCols = `id, job_id, kind, trigger, status, started_at, finished_at, queued_ms, bytes, files, summary, error`
+const runCols = `id, job_id, kind, trigger, status, started_at, finished_at, queued_ms, bytes, files, summary, error, acked_at, acked_by`
 
 func (c *Catalog) ListRuns(ctx context.Context, jobID string, limit int) ([]Run, error) {
 	rows, err := c.db.QueryContext(ctx, `SELECT `+runCols+` FROM runs WHERE job_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`, jobID, limit)
@@ -377,8 +379,9 @@ func scanRun(s scanner) (Run, error) {
 	var r Run
 	var started string
 	var finished sql.NullString
+	var acked sql.NullString
 	var queuedMs int64
-	err := s.Scan(&r.ID, &r.JobID, &r.Kind, &r.Trigger, &r.Status, &started, &finished, &queuedMs, &r.Bytes, &r.Files, &r.Summary, &r.Error)
+	err := s.Scan(&r.ID, &r.JobID, &r.Kind, &r.Trigger, &r.Status, &started, &finished, &queuedMs, &r.Bytes, &r.Files, &r.Summary, &r.Error, &acked, &r.AckedBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}
@@ -394,7 +397,19 @@ func scanRun(s scanner) (Run, error) {
 			return Run{}, err
 		}
 	}
+	if acked.Valid {
+		if r.AckedAt, err = time.Parse(time.RFC3339Nano, acked.String); err != nil {
+			return Run{}, err
+		}
+	}
 	return r, nil
+}
+
+// AckRun records that by has seen a failed or partial restore, check or import
+// of the job. It is ErrNotFound for any other run, or one already acknowledged.
+func (c *Catalog) AckRun(ctx context.Context, jobID string, runID int64, by string, at time.Time) error {
+	return c.update(ctx, `UPDATE runs SET acked_at = ?, acked_by = ? WHERE id = ? AND job_id = ? AND kind != 'backup' AND status IN (?, ?) AND acked_at IS NULL`,
+		formatTime(at), by, runID, jobID, RunFailed, RunPartial)
 }
 
 func marshalLists(a, b []string) (string, string, error) {
