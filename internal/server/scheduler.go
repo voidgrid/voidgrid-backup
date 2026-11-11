@@ -96,6 +96,7 @@ func (c *Controller) Schedule(ctx context.Context, tick time.Duration) {
 	defer t.Stop()
 	for {
 		now := time.Now()
+		c.failOrphanRuns(ctx, now)
 		c.startDue(ctx, now)
 		c.startMaintenance(ctx, now)
 		select {
@@ -103,6 +104,55 @@ func (c *Controller) Schedule(ctx context.Context, tick time.Duration) {
 			return
 		case <-t.C:
 		}
+	}
+}
+
+// finishRunWaits are the pauses between attempts to record a run's result.
+var finishRunWaits = []time.Duration{time.Second, 5 * time.Second, 15 * time.Second}
+
+// finishRun records how a run ended. The run is over whatever the catalog
+// says, so a write that fails (a busy or briefly unwritable database) is tried
+// again a few times rather than leaving the run recorded as running.
+func (c *Controller) finishRun(ctx context.Context, run catalog.Run) error {
+	ctx = context.WithoutCancel(ctx)
+	err := c.Catalog.FinishRun(ctx, run)
+	for _, wait := range finishRunWaits {
+		if err == nil || errors.Is(err, catalog.ErrNotFound) {
+			break
+		}
+		time.Sleep(wait)
+		err = c.Catalog.FinishRun(ctx, run)
+	}
+	return err
+}
+
+// orphanRunAfter is how long a run may be recorded as running with nothing
+// running for its job before it is taken for one whose result was never
+// recorded. A run starts its record a moment after it takes its job.
+const orphanRunAfter = 2 * time.Minute
+
+// failOrphanRuns marks as failed the runs that are recorded as running while
+// nothing is running for their job: the run ended and recording its result
+// failed for good. Left alone such a run would show as running until the next
+// restart.
+func (c *Controller) failOrphanRuns(ctx context.Context, now time.Time) {
+	runs, err := c.Catalog.RunningRuns(ctx)
+	if err != nil {
+		if ctx.Err() == nil {
+			slog.Error("scheduler: list running runs", "err", err)
+		}
+		return
+	}
+	for _, r := range runs {
+		if c.IsRunning(r.JobID) || now.Sub(r.StartedAt) < orphanRunAfter {
+			continue
+		}
+		err := c.Catalog.FailRunning(ctx, r.ID, now, "the run ended, but its result could not be recorded; see the server's log from that time")
+		if err != nil && !errors.Is(err, catalog.ErrNotFound) {
+			slog.Error("scheduler: close a run whose result was never recorded", "job", r.JobID, "run", r.ID, "err", err)
+			continue
+		}
+		slog.Warn("a run was still recorded as running with nothing running for its job; marked failed", "job", r.JobID, "run", r.ID, "kind", r.Kind)
 	}
 }
 

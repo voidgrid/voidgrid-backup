@@ -109,11 +109,15 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 	var okN, partialN, failedN, neverN, runningN int
 	var attn []statusLine // restores, checks and imports that did not succeed and nobody has acknowledged
 	var problems []string
+	var paused []string // jobs with a schedule that is switched off: nothing is backing them up
 	var next time.Time
 	var nextName string
 	for _, row := range rows {
 		if row.Running {
 			runningN++
+		}
+		if row.Schedule != "" && !row.Enabled {
+			paused = append(paused, row.Name)
 		}
 		switch {
 		case row.Last == nil:
@@ -170,10 +174,15 @@ func (u *ui) status(w http.ResponseWriter, r *http.Request) {
 		if len(problems) > 0 {
 			jl.Text += " (" + some(problems) + ")"
 		}
+		// A good last backup says nothing about a job that no longer runs: one
+		// whose schedule is switched off is named, however its last run went.
+		if len(paused) > 0 {
+			jl.Text += " · schedule switched off: " + some(paused)
+		}
 		switch {
 		case failedN > 0:
 			jl.Level = "bad"
-		case partialN > 0:
+		case partialN > 0 || len(paused) > 0:
 			jl.Level = "warn"
 		}
 	}

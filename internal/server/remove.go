@@ -44,7 +44,7 @@ func (c *Controller) repoIdle(ctx context.Context, repoID string) error {
 	if len(using) > 0 {
 		return RepoInUseError{Jobs: using}
 	}
-	if c.IsRunning(repoMeasureKey(repoID)) || c.IsRunning(repoWipeKey(repoID)) {
+	if c.IsRunning(repoMeasureKey(repoID)) || c.IsRunning(repoWipeKey(repoID)) || c.IsRunning(repoMaintRunKey(repoID)) {
 		return ErrRunning
 	}
 	return nil
@@ -56,10 +56,9 @@ func (c *Controller) forgetRepository(ctx context.Context, repoID string) error 
 	if err := c.Catalog.DeleteRepository(ctx, repoID); err != nil {
 		return err
 	}
-	for _, key := range []string{repoStatsKey(repoID), repoWipeErrKey(repoID), repoMaintKey(repoID), repoServerCreatedKey(repoID), serverReachKey(repoID)} {
-		if err := c.Catalog.SetSetting(ctx, key, ""); err != nil {
-			slog.Warn("clear repository setting", "key", key, "err", err)
-		}
+	if err := c.Catalog.DeleteSettings(ctx, repoStatsKey(repoID), repoWipeErrKey(repoID), repoMaintKey(repoID),
+		repoServerCreatedKey(repoID), serverReachKey(repoID), repoMaintByKey(repoID), repoMaintSchedKey(repoID)); err != nil {
+		slog.Warn("clear the repository's settings", "repo", repoID, "err", err)
 	}
 	return nil
 }
@@ -197,7 +196,14 @@ func (c *Controller) DeleteJobOn(ctx context.Context, jobID string, snapshots bo
 			slog.Warn("job snapshots deleted", "job", job.Name, "repo", repo.ID, "snapshots", n, "on", agent.Name)
 		}
 	}
-	return n, c.Catalog.DeleteJob(ctx, jobID)
+	if err := c.Catalog.DeleteJob(ctx, jobID); err != nil {
+		return n, err
+	}
+	if err := c.Catalog.DeleteSettings(ctx, scheduleChangedKey(jobID), snapshotsSyncedKey(jobID), snapshotsViaKey(jobID)); err != nil {
+		slog.Warn("clear the job's settings", "job", jobID, "err", err)
+	}
+	c.snapLocks.Delete(jobID)
+	return n, nil
 }
 
 // DeleteSnapshot forgets one snapshot of a job through the job's agent. Its

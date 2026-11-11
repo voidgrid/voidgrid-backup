@@ -137,7 +137,13 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 		if derr := c.Catalog.DeleteRepository(ctx, id); derr != nil {
 			slog.Warn("remove failed repository record", "repo", id, "err", derr)
 		}
-		return catalog.Repository{}, "", fmt.Errorf("initialize on %s: %w", agent.Name, err)
+		err = fmt.Errorf("initialize on %s: %w", agent.Name, err)
+		if maybeCreated(err) {
+			// The agent may have created it before the failure: a generated
+			// password goes back with the error, since nothing else has it.
+			return catalog.Repository{}, generated, err
+		}
+		return catalog.Repository{}, "", err
 	}
 	if resp.GetKnownHosts() != "" && r.Config.SFTP != nil {
 		r.Config.SFTP.KnownHosts = resp.GetKnownHosts()
@@ -158,6 +164,22 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 		go c.checkServer(context.WithoutCancel(ctx), r) // outlives this call
 	}
 	return r, generated, nil
+}
+
+// maybeCreated says whether a failed InitRepository call may have left a
+// repository in storage: the agent said it created one before failing
+// (Aborted), or the call ended without an answer (it timed out, was cancelled
+// or the connection dropped), so what the agent did is not known.
+func maybeCreated(err error) bool {
+	var st interface{ GRPCStatus() *status.Status }
+	if !errors.As(err, &st) {
+		return false
+	}
+	switch st.GRPCStatus().Code() {
+	case codes.Aborted, codes.DeadlineExceeded, codes.Canceled, codes.Unavailable:
+		return true
+	}
+	return false
 }
 
 // JobInput is what the UI or API submits to create a job.
@@ -254,6 +276,9 @@ func (c *Controller) AddJob(ctx context.Context, in JobInput) (catalog.Job, erro
 	}
 	if repo.InitializedAt.IsZero() {
 		return catalog.Job{}, ErrNotInitialized
+	}
+	if c.IsRunning(repoWipeKey(repo.ID)) {
+		return catalog.Job{}, errors.New("this repository is being wiped; a job cannot be added to it")
 	}
 	if err := c.checkAssigned(ctx, repo.ID, j.AgentID); err != nil {
 		return catalog.Job{}, err
@@ -389,7 +414,7 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 		summarizeBackup(&run, resp.GetResults())
 		c.recordSnapshots(context.WithoutCancel(ctx), job, resp.GetResults())
 	}
-	if ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run); ferr != nil {
+	if ferr := c.finishRun(ctx, run); ferr != nil {
 		slog.Error("record run", "job", job.Name, "err", ferr)
 	}
 	slog.Info("backup finished", "job", job.Name, "status", run.Status, "summary", run.Summary, "err", run.Error)
@@ -515,7 +540,7 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 	} else {
 		summarizeCheck(&run, resp)
 	}
-	if ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run); ferr != nil {
+	if ferr := c.finishRun(ctx, run); ferr != nil {
 		slog.Error("record run", "job", jobID, "err", ferr)
 	}
 	slog.Info("check finished", "job", jobID, "status", run.Status, "summary", run.Summary, "err", run.Error)
@@ -673,7 +698,7 @@ func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path,
 		run.Bytes, run.Files = resp.GetBytes(), int(resp.GetFiles())
 		run.Summary = withOwnershipNote(fmt.Sprintf("restored %s of %s to %s%s: %d files, %s", what, shortID(snapshotID), target, onHost(job, agent), run.Files, HumanBytes(run.Bytes)), resp, agent.Name)
 	}
-	if ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run); ferr != nil {
+	if ferr := c.finishRun(ctx, run); ferr != nil {
 		slog.Error("record run", "job", jobID, "err", ferr)
 	}
 	c.notifyOnFailure(context.WithoutCancel(ctx), job.Name, run)

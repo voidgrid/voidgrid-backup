@@ -35,12 +35,16 @@ func (c *Controller) initFromServer(ctx context.Context, r catalog.Repository, g
 	}
 	ictx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
-	_, knownHosts, err := c.Engine.Init(ictx, er)
+	created, knownHosts, err := c.Engine.Init(ictx, er)
 	if err != nil {
 		if derr := c.Catalog.DeleteRepository(ctx, r.ID); derr != nil {
 			slog.Warn("remove failed repository record", "repo", r.ID, "err", derr)
 		}
-		return catalog.Repository{}, "", fmt.Errorf("initialize on the server: %w", err)
+		err = fmt.Errorf("initialize on the server: %w", err)
+		if created {
+			return catalog.Repository{}, generated, err // it is in storage: the password must not be lost
+		}
+		return catalog.Repository{}, "", err
 	}
 	if knownHosts != "" && r.Config.SFTP != nil {
 		r.Config.SFTP.KnownHosts = knownHosts

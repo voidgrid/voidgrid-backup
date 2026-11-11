@@ -94,6 +94,16 @@ type SignOuts interface {
 	SignOut(ctx context.Context, identity string, at time.Time) error
 }
 
+// EndSessions ends every session of identity that has started up to now, as
+// if it had signed out everywhere. Without SetSignOuts there is nothing to
+// record it in and it does nothing.
+func (a *Authenticator) EndSessions(ctx context.Context, identity string) error {
+	if a.signOuts == nil {
+		return nil
+	}
+	return a.signOuts.SignOut(ctx, identity, time.Now())
+}
+
 // SetSignOuts makes Logout end the session on the server too, and CurrentUser
 // refuse a session that was signed out. Call it before the Authenticator
 // serves requests.

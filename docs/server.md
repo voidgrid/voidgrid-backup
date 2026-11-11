@@ -239,8 +239,9 @@ than OIDC being temporarily unavailable.
 The home page (`/`) is the one place to see whether everything is fine, in four
 short lines, each a link to the page behind it: **Agents** (how many are
 reachable, which are not, how many are waiting for approval), **Jobs** (the
-result of each job's last backup, with the names of failed and partial ones and
-how many are running now), **Repositories** (whether maintenance last
+result of each job's last backup, with the names of failed and partial ones,
+how many are running now, and any job whose schedule is switched off, since a
+good last backup says nothing about a job that no longer runs), **Repositories** (whether maintenance last
 succeeded, and any that are not set up) and **Next backup** (the soonest
 scheduled start). A line turns amber or red when something needs attention, and
 the heading says how many do. The page only reads the server's own records, so

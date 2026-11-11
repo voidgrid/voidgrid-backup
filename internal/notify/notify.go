@@ -191,6 +191,13 @@ func postJSON(ctx context.Context, url string, body any) (string, error) {
 	return detail, nil
 }
 
+// headerValue is s as the value of a mail header: on one line. A job name is
+// part of the subject, and a line break in it would otherwise end the subject
+// and start a header, or the body, of the operator's choosing.
+func headerValue(s string) string {
+	return strings.Join(strings.FieldsFunc(s, func(r rune) bool { return r == '\r' || r == '\n' }), " ")
+}
+
 // emailTimeout bounds one email, from connecting to the server's last answer.
 // A variable so that tests can shorten it.
 var emailTimeout = 30 * time.Second
@@ -315,7 +322,7 @@ func sendEmail(ctx context.Context, c *EmailConfig, cfg Config, ev Event) error 
 		return fmt.Errorf("data: %w", err)
 	}
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n",
-		c.From, strings.Join(c.To, ", "), ev.title(), ev.body(cfg))
+		headerValue(c.From), headerValue(strings.Join(c.To, ", ")), headerValue(ev.title()), ev.body(cfg))
 	if _, err := w.Write([]byte(msg)); err != nil {
 		tidy.Close(w)
 		return fmt.Errorf("write body: %w", err)

@@ -31,6 +31,11 @@ func (e *Engine) RepoStats(ctx context.Context, r Repo) (RepoStats, error) {
 	}
 	defer tidy.CloseCtx(ctx, "storage", st)
 	err = st.ListBlobs(ctx, "", func(bm blob.Metadata) error {
+		// An S3 listing also returns whatever else starts with the prefix
+		// (see kopiaBlob); that is not this repository's space.
+		if !kopiaBlob(bm.BlobID) {
+			return nil
+		}
 		out.StoredBytes += bm.Length
 		out.Blobs++
 		return nil

@@ -211,7 +211,11 @@ func run(listen, agentListen, data string, poll time.Duration, oidcCfg webauth.C
 	go ctrl.Poll(ctx, poll)
 	go ctrl.Schedule(ctx, 30*time.Second)
 
-	srv := &http.Server{Addr: listen, Handler: server.NewHandler(ctrl), ReadHeaderTimeout: 10 * time.Second}
+	// No write timeout: adding or moving a repository answers only when the
+	// agent has finished, which can take minutes. Reading a request and keeping
+	// an idle connection are bounded.
+	srv := &http.Server{Addr: listen, Handler: server.NewHandler(ctrl),
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: time.Minute, IdleTimeout: 2 * time.Minute}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	slog.Info("voidgrid-backup-server listening", "addr", listen, "version", version.Version)

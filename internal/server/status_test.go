@@ -44,6 +44,19 @@ func TestStatusPage(t *testing.T) {
 		t.Errorf("a good backup is not reported as ok:\n%s", page)
 	}
 
+	// A schedule that is switched off is named, however well the last backup
+	// went: nothing is backing that job up any more.
+	if err := c.SetJobEnabled(ctx, job.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	page = get(t, client, srv.URL+"/", "schedule switched off: docs")
+	if !strings.Contains(page, "1 thing needs attention") {
+		t.Errorf("a switched-off schedule does not need attention:\n%s", page)
+	}
+	if err := c.SetJobEnabled(ctx, job.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
 	// An agent that cannot be reached, and one waiting for approval.
 	if err := c.Catalog.RecordFailure(ctx, job.AgentID, "connection refused"); err != nil {
 		t.Fatal(err)

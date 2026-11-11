@@ -305,3 +305,20 @@ func TestSendEmailGivesUpOnASilentServer(t *testing.T) {
 		t.Fatal("Send is still waiting for a mail server that never answers")
 	}
 }
+
+// A line break in a job name must not start a mail header of its own.
+func TestSendEmailKeepsTheSubjectOnOneLine(t *testing.T) {
+	addr, got := startFakeSMTP(t, false)
+	host, portStr, _ := net.SplitHostPort(addr)
+	port, _ := strconv.Atoi(portStr)
+	cfg := Config{Email: &EmailConfig{Enabled: true, Host: host, Port: port, From: "vb@example.com", To: []string{"me@example.com"}}}
+	ev := testEvent()
+	ev.Job = "docs\r\nBcc: someone@example.com\r\n\r\ninjected body"
+	if results := Send(context.Background(), cfg, ev); len(results) != 1 || results[0].Err != nil {
+		t.Fatalf("results: %+v", results)
+	}
+	head, _, _ := strings.Cut(got.data, "\r\n\r\n")
+	if strings.Contains(head, "\nBcc:") || !strings.Contains(head, "Subject: docs Bcc: someone@example.com injected body backup: failed") {
+		t.Fatalf("headers: %q", head)
+	}
+}

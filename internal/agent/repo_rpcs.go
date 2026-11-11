@@ -36,6 +36,11 @@ func (a *Agent) InitRepository(ctx context.Context, req *agentpb.InitRepositoryR
 	}
 	created, kh, err := a.engine.Init(ctx, r)
 	if err != nil {
+		if created {
+			// The repository is in storage now. Aborted tells the server so: a
+			// password it generated must still reach the operator.
+			return nil, status.Errorf(codes.Aborted, "the repository was created, but then: %v", err)
+		}
 		return nil, err
 	}
 	return &agentpb.InitRepositoryResponse{Created: created, KnownHosts: kh}, nil
@@ -59,8 +64,11 @@ func (a *Agent) Backup(ctx context.Context, req *agentpb.BackupRequest) (*agentp
 		Annual:  int(k.GetKeepAnnual()),
 	}
 	waiting := time.Now()
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	queued := time.Since(waiting)
 	resp, err := a.runBackup(engine.WithNetworkRetry(ctx), r, req, keep)
 	if resp != nil {
@@ -170,8 +178,11 @@ func (a *Agent) Restore(ctx context.Context, req *agentpb.RestoreRequest) (*agen
 	if err != nil {
 		return nil, err
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	logStarted("restore started", r.ID, "snapshot", req.GetSnapshotId(), "path", req.GetPath(), "target", req.GetTarget())
 	st, err := a.engine.Restore(ctx, r, req.GetSnapshotId(), req.GetPath(), req.GetTarget(), req.GetOverwrite())
 	if err != nil {

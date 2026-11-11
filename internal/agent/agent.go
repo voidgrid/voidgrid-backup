@@ -60,7 +60,7 @@ type Agent struct {
 	docker *docker.Client  // nil when no Docker socket is configured
 	hv     virt.Hypervisor // nil when no libvirt socket is configured
 	// opMu allows one backup or restore at a time on this host.
-	opMu sync.Mutex
+	opMu opLock
 
 	dir          string
 	hostname     string // the OS host name, only a suggestion for the operator
@@ -70,6 +70,29 @@ type Agent struct {
 
 	mu       sync.Mutex
 	enrolled *identity // nil until enrolled
+}
+
+// opLock lets one operation run at a time. Unlike a sync.Mutex, an operation
+// waiting for its turn gives up when its context ends: a run the operator
+// cancelled, or one that timed out on the server, must not start anyway once
+// the operation ahead of it finishes.
+type opLock struct {
+	once sync.Once
+	ch   chan struct{}
+}
+
+// lock waits for the turn and returns the func that gives it back, or the
+// context's error as a gRPC status if ctx ends first.
+func (l *opLock) lock(ctx context.Context) (unlock func(), err error) {
+	l.once.Do(func() { l.ch = make(chan struct{}, 1) })
+	if ctx.Err() == nil { // a context that is already over never takes the turn
+		select {
+		case l.ch <- struct{}{}:
+			return func() { <-l.ch }, nil
+		case <-ctx.Done():
+		}
+	}
+	return nil, status.FromContextError(ctx.Err()).Err()
 }
 
 type identity struct {

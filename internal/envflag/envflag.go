@@ -1,62 +1,49 @@
-// Package envflag registers command-line flags whose defaults can come from
-// environment variables, so the same setting works as -flag or in a .env file.
-// A flag given on the command line always wins over the environment.
+// Package envflag defines flags that can also be set from the environment: a
+// flag given on the command line wins over the variable, and the variable over
+// the default.
 package envflag
 
 import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 )
 
-// String registers a string flag defaulting to $env when set, else def.
+// fromEnv sets the flag from its environment variable, if that is set. The
+// value is set on the flag and is not its default: -help prints defaults, and
+// a token or a client secret from the environment must not end up in it.
+func fromEnv(name, env string) {
+	v, ok := os.LookupEnv(env)
+	if !ok {
+		return
+	}
+	if err := flag.Set(name, v); err != nil {
+		fmt.Fprintf(os.Stderr, "invalid $%s=%q: %v\n", env, v, err)
+		os.Exit(2)
+	}
+}
+
 func String(name, env, def, usage string) *string {
-	if v, ok := os.LookupEnv(env); ok {
-		def = v
-	}
-	return flag.String(name, def, usage+" [$"+env+"]")
+	p := flag.String(name, def, usage+" [$"+env+"]")
+	fromEnv(name, env)
+	return p
 }
 
-// Duration registers a duration flag defaulting to $env when set, else def.
-// An unparsable $env is a startup error rather than a silent fallback.
 func Duration(name, env string, def time.Duration, usage string) *time.Duration {
-	if v, ok := os.LookupEnv(env); ok {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "invalid $%s=%q: %v\n", env, v, err)
-			os.Exit(2)
-		}
-		def = d
-	}
-	return flag.Duration(name, def, usage+" [$"+env+"]")
+	p := flag.Duration(name, def, usage+" [$"+env+"]")
+	fromEnv(name, env)
+	return p
 }
 
-// Bool registers a bool flag defaulting to $env when set, else def. An
-// unparsable $env is a startup error rather than a silent fallback.
 func Bool(name, env string, def bool, usage string) *bool {
-	if v, ok := os.LookupEnv(env); ok {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "invalid $%s=%q: %v\n", env, v, err)
-			os.Exit(2)
-		}
-		def = b
-	}
-	return flag.Bool(name, def, usage+" [$"+env+"]")
+	p := flag.Bool(name, def, usage+" [$"+env+"]")
+	fromEnv(name, env)
+	return p
 }
 
-// Int registers an int flag defaulting to $env when set, else def. An
-// unparsable $env is a startup error rather than a silent fallback.
 func Int(name, env string, def int, usage string) *int {
-	if v, ok := os.LookupEnv(env); ok {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "invalid $%s=%q: %v\n", env, v, err)
-			os.Exit(2)
-		}
-		def = n
-	}
-	return flag.Int(name, def, usage+" [$"+env+"]")
+	p := flag.Int(name, def, usage+" [$"+env+"]")
+	fromEnv(name, env)
+	return p
 }

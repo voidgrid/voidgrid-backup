@@ -140,7 +140,8 @@ func run(c config) error {
 	}
 
 	if c.healthListen != "" {
-		hs := &http.Server{Addr: c.healthListen, Handler: a.HealthHandler(lis.Addr().String()), ReadHeaderTimeout: 5 * time.Second}
+		hs := &http.Server{Addr: c.healthListen, Handler: a.HealthHandler(lis.Addr().String()), ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
 		go func() {
 			if err := hs.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				slog.Error("health endpoint", "addr", c.healthListen, "err", err)

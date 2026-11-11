@@ -18,8 +18,11 @@ func (a *Agent) DeleteSnapshot(ctx context.Context, req *agentpb.DeleteSnapshotR
 	if err != nil {
 		return nil, err
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	ids := req.GetSnapshotIds()
 	if id := req.GetSnapshotId(); id != "" {
 		ids = append([]string{id}, ids...)
@@ -36,8 +39,11 @@ func (a *Agent) WipeRepository(ctx context.Context, req *agentpb.WipeRepositoryR
 	if err != nil {
 		return nil, err
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	logStarted("repository wipe started", r.ID, "location", r.Config.Location())
 	blobs, bytes, err := a.engine.Wipe(ctx, r)
 	if err != nil {
@@ -52,8 +58,11 @@ func (a *Agent) Maintain(ctx context.Context, req *agentpb.MaintainRequest) (*ag
 		return nil, err
 	}
 	waiting := time.Now()
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	queued := time.Since(waiting)
 	logStarted("maintenance started", r.ID)
 	ran, owner, err := a.engine.Maintain(engine.WithNetworkRetry(ctx), r)
@@ -89,8 +98,11 @@ func (a *Agent) MoveRepository(ctx context.Context, req *agentpb.MoveRepositoryR
 	if err := json.Unmarshal(req.GetNewConfigJson(), &to); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "new repository config: %v", err)
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	logStarted("repository move started", r.ID, "from", r.Config.Location(), "to", to.Location())
 	if err := a.engine.MoveRepository(ctx, r.Config, to); err != nil {
 		return nil, err
@@ -105,8 +117,11 @@ func (a *Agent) TakeMaintenance(ctx context.Context, req *agentpb.TakeMaintenanc
 	if err != nil {
 		return nil, err
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	logStarted("maintenance takeover started", r.ID)
 	if err := a.engine.SetMaintenanceOwner(ctx, r, a.engine.UsernameAtHost()); err != nil {
 		return nil, err

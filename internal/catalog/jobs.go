@@ -341,6 +341,31 @@ func (c *Catalog) FinishRun(ctx context.Context, r Run) error {
 		r.Status, formatTime(r.FinishedAt), r.Queued.Milliseconds(), r.Bytes, r.Files, r.Summary, r.Error, r.ID)
 }
 
+// RunningRuns returns every run still recorded as running.
+func (c *Catalog) RunningRuns(ctx context.Context) ([]Run, error) {
+	rows, err := c.db.QueryContext(ctx, `SELECT `+runCols+` FROM runs WHERE status = ? ORDER BY id`, RunRunning)
+	if err != nil {
+		return nil, err
+	}
+	defer tidy.CloseWarn("rows", rows)
+	var out []Run
+	for rows.Next() {
+		r, err := scanRun(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// FailRunning marks one run failed with msg, if it is still recorded as
+// running. ErrNotFound if it is not.
+func (c *Catalog) FailRunning(ctx context.Context, id int64, at time.Time, msg string) error {
+	return c.update(ctx, `UPDATE runs SET status = ?, finished_at = ?, error = ? WHERE id = ? AND status = ?`,
+		RunFailed, formatTime(at), msg, id, RunRunning)
+}
+
 // FailInterruptedRuns marks runs left "running" by a previous server process.
 func (c *Catalog) FailInterruptedRuns(ctx context.Context, at time.Time) (int64, error) {
 	res, err := c.db.ExecContext(ctx, `UPDATE runs SET status = ?, finished_at = ?, error = 'server restarted during the run' WHERE status = ?`,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -11,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
@@ -243,5 +247,41 @@ func TestGeneratedPasswordSurvivesAFailureAfterCreating(t *testing.T) {
 	// It is the password of what is in storage.
 	if _, err := eng.Inspect(ctx, engine.Repo{ID: "check", Config: repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: store}}, Password: generated}); err != nil {
 		t.Fatalf("the returned password does not open the repository: %v", err)
+	}
+}
+
+// Which failures of creating a repository on an agent may have left one behind.
+func TestMaybeCreated(t *testing.T) {
+	for code, want := range map[codes.Code]bool{
+		codes.Aborted: true, codes.DeadlineExceeded: true, codes.Canceled: true, codes.Unavailable: true,
+		codes.InvalidArgument: false, codes.Unknown: false, codes.PermissionDenied: false,
+	} {
+		err := fmt.Errorf("initialize on box: %w", status.Error(code, "x"))
+		if got := maybeCreated(err); got != want {
+			t.Errorf("%s: %v, want %v", code, got, want)
+		}
+	}
+	if maybeCreated(errors.New("dial tcp: connection refused")) {
+		t.Error("a plain error counts as maybe created")
+	}
+}
+
+// A repository is not removed or wiped while its maintenance is running.
+func TestRemoveAndWipeWaitForMaintenance(t *testing.T) {
+	ctx := context.Background()
+	c := newController(t)
+	if err := c.Catalog.AddRepository(ctx, catalog.Repository{ID: "r1", Name: "r1", Password: "x", CreatedAt: time.Now(),
+		Config: repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: "/x"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if !c.inflight.start(repoMaintRunKey("r1")) {
+		t.Fatal("could not mark maintenance as running")
+	}
+	if err := c.RemoveRepository(ctx, "r1"); !errors.Is(err, ErrRunning) {
+		t.Fatalf("remove during maintenance: %v", err)
+	}
+	c.inflight.done(repoMaintRunKey("r1"))
+	if err := c.RemoveRepository(ctx, "r1"); err != nil {
+		t.Fatalf("remove afterwards: %v", err)
 	}
 }

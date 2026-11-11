@@ -83,7 +83,7 @@ func (c *Controller) DeleteAgent(ctx context.Context, id string) (warnings []str
 	if err := c.Catalog.DeleteAgent(ctx, id); err != nil {
 		return nil, err
 	}
-	if err := c.Catalog.SetSetting(ctx, agentNextCertKey(id), ""); err != nil {
+	if err := c.Catalog.DeleteSettings(ctx, agentNextCertKey(id)); err != nil {
 		warnings = append(warnings, "could not clear the agent's pending certificate renewal: "+err.Error())
 	}
 	return warnings, nil

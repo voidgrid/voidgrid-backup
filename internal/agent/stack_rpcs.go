@@ -79,8 +79,11 @@ func (a *Agent) RestoreStack(ctx context.Context, req *agentpb.RestoreStackReque
 			return nil, err
 		}
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	logStarted("restore started", r.ID, "stack", req.GetSnapshotId(), "target", req.GetTargetRoot())
 	st, err := a.engine.RestoreStack(ctx, r, dk, req.GetSnapshotId(), req.GetTargetRoot(), req.GetStopStack())
 	if err != nil {
@@ -98,8 +101,11 @@ func (a *Agent) ImportDump(ctx context.Context, req *agentpb.ImportDumpRequest) 
 	if err != nil {
 		return nil, err
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	out, err := a.engine.ImportDump(ctx, r, dk, req.GetSnapshotId(), req.GetService())
 	if err != nil {
 		return nil, err

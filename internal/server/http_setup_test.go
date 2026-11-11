@@ -255,3 +255,56 @@ func TestRecoveryCodeWorksOnceUnderConcurrentUse(t *testing.T) {
 		}
 	}
 }
+
+// A new batch of recovery codes ends the sessions started with the old ones,
+// except the session that asked for it; other identities are untouched.
+func TestNewRecoveryCodesEndRecoveryCodeSessions(t *testing.T) {
+	c := newController(t)
+	c.setAuth(c.Auth()) // with sign-outs recorded in the catalog, as the server runs
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	if _, err := c.GenerateRecoveryCodes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	client := func(identity string) *http.Client {
+		t.Helper()
+		jar, err := cookiejar.New(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		c.Auth().IssueSession(rec, httptest.NewRequest("GET", "/", nil), identity)
+		u, _ := url.Parse(srv.URL)
+		jar.SetCookies(u, rec.Result().Cookies())
+		return &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	}
+	signedIn := func(cl *http.Client) bool {
+		t.Helper()
+		resp, err := cl.Get(srv.URL + "/jobs")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tidy.Close(resp.Body)
+		return resp.StatusCode == http.StatusOK
+	}
+	mine, theirs, other := client(webauth.RecoveryIdentity), client(webauth.RecoveryIdentity), client("person@example.com")
+	if !signedIn(mine) || !signedIn(theirs) || !signedIn(other) {
+		t.Fatal("fresh sessions are not accepted")
+	}
+	req, _ := http.NewRequest("POST", srv.URL+"/setup", nil)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	resp, err := mine.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("new codes: %v %v", resp, err)
+	}
+	tidy.Close(resp.Body)
+	if signedIn(theirs) {
+		t.Error("another recovery-code session survived a new batch of codes")
+	}
+	if !signedIn(mine) {
+		t.Error("the session that made the new codes was ended")
+	}
+	if !signedIn(other) {
+		t.Error("a session of another identity was ended")
+	}
+}

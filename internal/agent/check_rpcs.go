@@ -13,8 +13,11 @@ func (a *Agent) Check(ctx context.Context, req *agentpb.CheckRequest) (*agentpb.
 	if err != nil {
 		return nil, err
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	logStarted("check started", r.ID, "verify_percent", req.GetVerifyPercent())
 	res, err := a.engine.Check(engine.WithNetworkRetry(ctx), r, engine.CheckOptions{
 		VerifyPercent:       req.GetVerifyPercent(),

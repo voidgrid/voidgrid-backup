@@ -47,8 +47,11 @@ func (a *Agent) RepoStats(ctx context.Context, req *agentpb.RepoStatsRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	a.opMu.Lock()
-	defer a.opMu.Unlock()
+	unlock, lerr := a.opMu.lock(ctx)
+	if lerr != nil {
+		return nil, lerr
+	}
+	defer unlock()
 	st, err := a.engine.RepoStats(ctx, r)
 	if err != nil {
 		return nil, err

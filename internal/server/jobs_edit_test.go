@@ -393,3 +393,73 @@ func TestAgentForRepoIsAnAssignedOne(t *testing.T) {
 		t.Fatalf("a server-created repository with no agent was given to %q", a.ID)
 	}
 }
+
+// A run still recorded as running with nothing running for its job is closed
+// as failed; one whose job is running, or that only just started, is left.
+func TestOrphanRunsAreMarkedFailed(t *testing.T) {
+	c := newController(t)
+	ctx := context.Background()
+	now := time.Now()
+	if err := c.Catalog.AddAgent(ctx, catalog.Agent{ID: "a1", Name: "a1", Address: "127.0.0.1:1", EnrolledAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Catalog.AddRepository(ctx, catalog.Repository{ID: "r1", Name: "r1", Password: "x", CreatedAt: now,
+		Config: repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: "/x"}}}); err != nil {
+		t.Fatal(err)
+	}
+	start := map[string]int64{}
+	for _, id := range []string{"orphan", "busy", "fresh"} {
+		if err := c.Catalog.AddJob(ctx, catalog.Job{ID: id, Name: id, AgentID: "a1", RepositoryID: "r1", Paths: []string{"/d"},
+			Keep: catalog.DefaultRetention, CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+		at := now.Add(-time.Hour)
+		if id == "fresh" {
+			at = now.Add(-10 * time.Second)
+		}
+		run, err := c.Catalog.StartRun(ctx, id, "backup", "schedule", at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		start[id] = run
+	}
+	c.inflight.start("busy")
+	defer c.inflight.done("busy")
+	c.failOrphanRuns(ctx, now)
+	for id, want := range map[string]string{"orphan": catalog.RunFailed, "busy": catalog.RunRunning, "fresh": catalog.RunRunning} {
+		last, err := c.Catalog.LastRun(ctx, id, "backup")
+		if err != nil || last.ID != start[id] || last.Status != want {
+			t.Errorf("%s: status %q (%v), want %q", id, last.Status, err, want)
+		}
+	}
+	if last, _ := c.Catalog.LastRun(ctx, "orphan", "backup"); !strings.Contains(last.Error, "could not be recorded") || last.FinishedAt.IsZero() {
+		t.Errorf("orphan run: %+v", last)
+	}
+}
+
+// A job cannot be added to a repository that is being wiped, and deleting a
+// job takes its settings with it.
+func TestAddJobDuringAWipeAndSettingsOfADeletedJob(t *testing.T) {
+	ctx := context.Background()
+	c, job, src := setupJob(t)
+	c.inflight.start(repoWipeKey(job.RepositoryID))
+	_, err := c.AddJob(ctx, JobInput{Name: "late", AgentID: job.AgentID, RepositoryID: job.RepositoryID, Paths: []string{src}, Keep: catalog.DefaultRetention})
+	c.inflight.done(repoWipeKey(job.RepositoryID))
+	if err == nil || !strings.Contains(err.Error(), "being wiped") {
+		t.Fatalf("add during a wipe: %v", err)
+	}
+	if err := c.SetSchedule(ctx, job.ID, "5 4 * * *"); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := c.Catalog.GetSetting(ctx, scheduleChangedKey(job.ID)); v == "" {
+		t.Fatal("no schedule change was noted")
+	}
+	if _, err := c.DeleteJob(ctx, job.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{scheduleChangedKey(job.ID), snapshotsSyncedKey(job.ID), snapshotsViaKey(job.ID)} {
+		if v, _ := c.Catalog.GetSetting(ctx, k); v != "" {
+			t.Errorf("%s is still set after the job was deleted", k)
+		}
+	}
+}

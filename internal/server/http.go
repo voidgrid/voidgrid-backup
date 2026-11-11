@@ -63,7 +63,9 @@ func NewHandler(c *Controller) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 		if err := c.Catalog.Ping(ctx); err != nil {
-			http.Error(w, "catalog: "+err.Error(), http.StatusServiceUnavailable)
+			// The reason goes to the log: this answers without a sign-in.
+			slog.Error("health check: the catalog does not answer", "err", err)
+			http.Error(w, "catalog unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		if _, err := io.WriteString(w, "ok\n"); err != nil {
@@ -530,7 +532,7 @@ func (u *ui) addRepository(w http.ResponseWriter, r *http.Request) {
 		// show the password with the error, it is not stored anywhere usable.
 		if generated != "" {
 			p.Generated, p.Created = generated, f.Get("name")
-			p.Error += ". The repository exists in storage with the password shown above: record it, then remove any half-made entry for it below and add the repository again with that password."
+			p.Error += ". A repository may now exist at that location with the password shown above, which is its only key: record it, remove any half-made entry for it below, and add the repository again with that password."
 		}
 		u.renderRepositories(w, r, http.StatusBadRequest, p)
 		return

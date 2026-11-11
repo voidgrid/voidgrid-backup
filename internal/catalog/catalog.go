@@ -222,6 +222,16 @@ func (c *Catalog) GetSetting(ctx context.Context, key string) (string, error) {
 	return v, err
 }
 
+// DeleteSettings removes the given keys; one that is not there is not an error.
+func (c *Catalog) DeleteSettings(ctx context.Context, keys ...string) error {
+	for _, k := range keys {
+		if _, err := c.db.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SetSetting stores value for key, creating or replacing it.
 func (c *Catalog) SetSetting(ctx context.Context, key, value string) error {
 	_, err := c.db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)

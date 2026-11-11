@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"errors"
 	"net/http"
 	"net/url"
@@ -123,7 +124,7 @@ func (u *ui) generateSetupCodes(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if r.PostForm.Get("token") != tok {
+		if subtle.ConstantTimeCompare([]byte(r.PostForm.Get("token")), []byte(tok)) != 1 {
 			time.Sleep(failDelay)
 			p := setupPage{base: u.newBase("Setup", "", r), Done: false,
 				OIDCManagedByFlags: u.c.FlagOIDCConfig.Enabled(), OIDCForm: r.PostForm}
@@ -158,6 +159,17 @@ func (u *ui) generateSetupCodes(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// A new batch ends the sessions the old codes started, as it ends the old
+	// codes: whoever held one of those is out. The session doing this, if it is
+	// a recovery-code one itself, starts again so it is not thrown out too.
+	who, _ := u.c.Auth().CurrentUser(r)
+	if err := u.c.Auth().EndSessions(ctx, webauth.RecoveryIdentity); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if who == webauth.RecoveryIdentity {
+		u.c.Auth().IssueSession(w, r, webauth.RecoveryIdentity)
 	}
 	u.render(w, http.StatusOK, "setup", setupPage{
 		base: u.newBase("Setup", "", r), Done: true, InitialSetup: !done,

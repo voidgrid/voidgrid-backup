@@ -180,7 +180,7 @@ func (c *Controller) jobOp(ctx context.Context, jobID, onID string, inPlace bool
 	default:
 		run.Status = catalog.RunSuccess
 	}
-	ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run)
+	ferr := c.finishRun(ctx, run)
 	c.notifyOnFailure(context.WithoutCancel(ctx), job.Name, run)
 	if ferr != nil {
 		return run, ferr
