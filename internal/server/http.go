@@ -526,6 +526,12 @@ func (u *ui) addRepository(w http.ResponseWriter, r *http.Request) {
 			f.Del(k)
 		}
 		p.Form, p.Error = f, err.Error()
+		// It failed after the repository was created with a generated password:
+		// show the password with the error, it is not stored anywhere usable.
+		if generated != "" {
+			p.Generated, p.Created = generated, f.Get("name")
+			p.Error += ". The repository exists in storage with the password shown above: record it, then remove any half-made entry for it below and add the repository again with that password."
+		}
 		u.renderRepositories(w, r, http.StatusBadRequest, p)
 		return
 	}
@@ -934,7 +940,7 @@ func (u *ui) toggleJob(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := u.c.Catalog.SetJobEnabled(r.Context(), id, !j.Enabled); err != nil {
+	if err := u.c.SetJobEnabled(r.Context(), id, !j.Enabled); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

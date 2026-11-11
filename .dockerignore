@@ -1,0 +1,9 @@
+# What the image build must not be sent: the Go caches (gigabytes), the git
+# history, credentials for the live tests and the examples, and local data.
+.cache/
+.dev/
+.git/
+reference/
+.env
+**/.env
+examples/*/data/

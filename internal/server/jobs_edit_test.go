@@ -3,12 +3,14 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/docker/dockertest"
@@ -210,5 +212,184 @@ func TestBuildStackViewMarksMountsInsideComposeDir(t *testing.T) {
 		if got[src] != inside {
 			t.Errorf("%s: Inside = %v, want %v", src, got[src], inside)
 		}
+	}
+}
+
+// A schedule moved to a time of day that has already passed today waits for
+// that time tomorrow: the change must not make the job due at once.
+func TestScheduleChangeAppliesFromTheNextStart(t *testing.T) {
+	c := newController(t)
+	ctx := context.Background()
+	now := time.Now()
+	if err := c.Catalog.AddAgent(ctx, catalog.Agent{ID: "a1", Name: "a1", Address: "127.0.0.1:1", EnrolledAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Catalog.AddRepository(ctx, catalog.Repository{ID: "r1", Name: "r1", Password: "x", CreatedAt: now,
+		Config: repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: "/x"}}}); err != nil {
+		t.Fatal(err)
+	}
+	daily := func(at time.Time) string {
+		at = at.In(time.Local)
+		return fmt.Sprintf("%d %d * * *", at.Minute(), at.Hour())
+	}
+	last := now.Add(-6 * time.Hour)
+	j := catalog.Job{ID: "j1", Name: "j1", AgentID: "a1", RepositoryID: "r1", Paths: []string{"/data"}, Schedule: daily(last),
+		Keep: catalog.DefaultRetention, Enabled: true, CreatedAt: now.Add(-48 * time.Hour)}
+	if err := c.Catalog.AddJob(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Catalog.StartRun(ctx, "j1", "backup", "schedule", last); err != nil {
+		t.Fatal(err)
+	}
+	due := func() time.Time {
+		t.Helper()
+		j, err := c.Catalog.Job(ctx, "j1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		next, err := NextRun(ctx, c.Catalog, j)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	// Each way a schedule changes: the Jobs list, dragging it on the Schedule
+	// page, and the job's edit form.
+	if err := c.SetSchedule(ctx, "j1", daily(now.Add(-2*time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	if next := due(); !next.After(now) {
+		t.Fatalf("after SetSchedule the job is due at once (next %s)", next)
+	}
+	if err := c.Catalog.SetSetting(ctx, scheduleChangedKey("j1"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.MoveSchedule(ctx, "j1", daily(now.Add(-2*time.Hour)), -30); err != nil {
+		t.Fatal(err)
+	}
+	if next := due(); !next.After(now) {
+		t.Fatalf("after MoveSchedule the job is due at once (next %s)", next)
+	}
+	if err := c.Catalog.SetSetting(ctx, scheduleChangedKey("j1"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.UpdateJob(ctx, "j1", JobInput{Name: "j1", Paths: []string{"/data"}, Schedule: daily(now.Add(-3 * time.Hour)),
+		Keep: catalog.DefaultRetention, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if next := due(); !next.After(now) {
+		t.Fatalf("after UpdateJob the job is due at once (next %s)", next)
+	}
+	// Saving the job without touching its schedule changes nothing: a run that
+	// is overdue stays overdue.
+	if err := c.Catalog.SetSetting(ctx, scheduleChangedKey("j1"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetSchedule(ctx, "j1", daily(now.Add(-3*time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	if next := due(); next.After(now) {
+		t.Fatalf("saving the same schedule put off an overdue run (next %s)", next)
+	}
+}
+
+// A job switched back on after a week waits for its next scheduled start.
+func TestReenabledJobWaitsForItsNextStart(t *testing.T) {
+	c := newController(t)
+	ctx := context.Background()
+	now := time.Now()
+	if err := c.Catalog.AddAgent(ctx, catalog.Agent{ID: "a1", Name: "a1", Address: "127.0.0.1:1", EnrolledAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Catalog.AddRepository(ctx, catalog.Repository{ID: "r1", Name: "r1", Password: "x", CreatedAt: now,
+		Config: repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: "/x"}}}); err != nil {
+		t.Fatal(err)
+	}
+	j := catalog.Job{ID: "j1", Name: "j1", AgentID: "a1", RepositoryID: "r1", Paths: []string{"/data"}, Schedule: "0 3 * * *",
+		Keep: catalog.DefaultRetention, CreatedAt: now.Add(-30 * 24 * time.Hour)}
+	if err := c.Catalog.AddJob(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Catalog.StartRun(ctx, "j1", "backup", "schedule", now.Add(-10*24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	due := func() time.Time {
+		t.Helper()
+		j, err := c.Catalog.Job(ctx, "j1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		next, err := NextRun(ctx, c.Catalog, j)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	if err := c.SetJobEnabled(ctx, "j1", true); err != nil {
+		t.Fatal(err)
+	}
+	if next := due(); !next.After(now) {
+		t.Fatalf("switched on from the job page: due at once (next %s)", next)
+	}
+	// The same through the edit form.
+	if err := c.SetJobEnabled(ctx, "j1", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Catalog.SetSetting(ctx, scheduleChangedKey("j1"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.UpdateJob(ctx, "j1", JobInput{Name: "j1", Paths: []string{"/data"}, Schedule: "0 3 * * *",
+		Keep: catalog.DefaultRetention, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if next := due(); !next.After(now) {
+		t.Fatalf("switched on in the edit form: due at once (next %s)", next)
+	}
+}
+
+// A repository without jobs is measured and maintained through an agent that
+// is assigned to it, never one that is not: the call carries its password.
+func TestAgentForRepoIsAnAssignedOne(t *testing.T) {
+	c := newController(t)
+	ctx := context.Background()
+	now := time.Now()
+	for _, n := range []string{"alpha", "bravo", "charlie"} {
+		if err := c.Catalog.AddAgent(ctx, catalog.Agent{ID: n, Name: n, Address: "127.0.0.1:1", EnrolledAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.Catalog.AddRepository(ctx, catalog.Repository{ID: "r1", Name: "r1", Password: "x", CreatedAt: now,
+		Config: repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: "/x"}}}); err != nil {
+		t.Fatal(err)
+	}
+	// From before assignments existed: open to any agent.
+	if a, err := c.agentForRepo(ctx, "r1"); err != nil || a.ID != "alpha" {
+		t.Fatalf("no assignments: %q %v", a.ID, err)
+	}
+	for _, id := range []string{"bravo", "charlie"} {
+		if err := c.Catalog.AssignAgent(ctx, "r1", id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if a, err := c.agentForRepo(ctx, "r1"); err != nil || a.ID != "bravo" {
+		t.Fatalf("assigned to bravo and charlie: %q %v", a.ID, err)
+	}
+	// One that can be reached comes before one that cannot.
+	if err := c.Catalog.RecordFailure(ctx, "bravo", "unreachable"); err != nil {
+		t.Fatal(err)
+	}
+	if a, err := c.agentForRepo(ctx, "r1"); err != nil || a.ID != "charlie" {
+		t.Fatalf("bravo unreachable: %q %v", a.ID, err)
+	}
+	// A repository the server created has no agent until one is assigned.
+	if err := c.Catalog.AddRepository(ctx, catalog.Repository{ID: "r2", Name: "r2", Password: "x", CreatedAt: now,
+		Config: repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: "/y"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Catalog.SetSetting(ctx, repoServerCreatedKey("r2"), "1"); err != nil {
+		t.Fatal(err)
+	}
+	if a, err := c.agentForRepo(ctx, "r2"); err == nil {
+		t.Fatalf("a server-created repository with no agent was given to %q", a.ID)
 	}
 }

@@ -28,3 +28,34 @@ func TestForAgentResolvesTheKey(t *testing.T) {
 		t.Errorf("per-agent keys only: %v", err)
 	}
 }
+
+func TestSharesS3Listing(t *testing.T) {
+	s3 := func(bucket, prefix string) Config {
+		return Config{Kind: KindS3, S3: &S3{Endpoint: "s3.example.com", Bucket: bucket, Prefix: prefix, AccessKeyID: "k", SecretAccessKey: "s"}}
+	}
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"nas", "nas2", true},
+		{"nas2", "nas", true},
+		{"", "nas", true}, // the bucket root lists every object that is not under a "/"
+		{"nas-backup", "nas-backup-old", true},
+		{"nas/", "nas2/", false},
+		{"nas", "nas/sub", false},
+		{"", "nas/", false},
+		{"nas", "other", false},
+		{"nas", "nas", false}, // the same place: Identity refuses that
+	} {
+		if got := s3("b", tc.a).SharesS3Listing(s3("b", tc.b)); got != tc.want {
+			t.Errorf("%q and %q: %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+	if s3("b", "nas").SharesS3Listing(s3("other-bucket", "nas2")) {
+		t.Error("different buckets share nothing")
+	}
+	fs := Config{Kind: KindFilesystem, Filesystem: &Filesystem{Path: "/nas"}}
+	if fs.SharesS3Listing(s3("b", "nas2")) || s3("b", "nas").SharesS3Listing(fs) {
+		t.Error("only S3 repositories can share a listing")
+	}
+}

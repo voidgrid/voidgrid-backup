@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
@@ -260,5 +261,47 @@ func TestPostJSONKeepsTheAnswerAndHidesTheURL(t *testing.T) {
 	_, err = postJSON(context.Background(), url, map[string]any{})
 	if err == nil || strings.Contains(err.Error(), "secret-token") {
 		t.Fatalf("a connection error must not carry the URL: %v", err)
+	}
+}
+
+// A mail server that accepts the connection and then says nothing must not hold
+// the sender: a run reports its outcome before it lets go of its job.
+func TestSendEmailGivesUpOnASilentServer(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	over := make(chan struct{})
+	t.Cleanup(func() {
+		close(over)
+		tidy.CloseWarn("listener", lis)
+	})
+	go func() {
+		for {
+			c, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			go func() { // held open and never answered, until the test is over
+				<-over
+				tidy.Close(c)
+			}()
+		}
+	}()
+	old := emailTimeout
+	emailTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { emailTimeout = old })
+
+	port := lis.Addr().(*net.TCPAddr).Port
+	cfg := Config{Email: &EmailConfig{Enabled: true, Host: "127.0.0.1", Port: port, From: "vb@example.com", To: []string{"me@example.com"}}}
+	done := make(chan []Result, 1)
+	go func() { done <- Send(context.Background(), cfg, testEvent()) }()
+	select {
+	case results := <-done:
+		if len(results) != 1 || results[0].Err == nil {
+			t.Fatalf("results: %+v, want one failed email", results)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Send is still waiting for a mail server that never answers")
 	}
 }

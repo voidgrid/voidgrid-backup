@@ -75,6 +75,7 @@ type Agent struct {
 type identity struct {
 	id   string
 	cert tls.Certificate
+	ca   *x509.Certificate // the server's CA, which cas holds
 	cas  *x509.CertPool
 }
 
@@ -254,7 +255,7 @@ func (a *Agent) loadIdentity() (*identity, error) {
 	}
 	pool := x509.NewCertPool()
 	pool.AddCert(ca)
-	return &identity{id: cert.Subject.CommonName, cert: pki.TLSCert(cert.Raw, a.key), cas: pool}, nil
+	return &identity{id: cert.Subject.CommonName, cert: pki.TLSCert(cert.Raw, a.key), ca: ca, cas: pool}, nil
 }
 
 func loadOrCreateKey(path string) (*ecdsa.PrivateKey, error) {

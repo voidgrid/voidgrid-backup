@@ -126,6 +126,11 @@ func (c *Controller) ImportDump(ctx context.Context, jobID, snapshotID, service 
 		}
 		if out := strings.TrimSpace(resp.GetOutput()); out != "" {
 			run.Summary += "\n" + out
+			// A client that carries on after a failed statement still exits 0:
+			// the dump was not loaded in full, so the run is not a success.
+			if failed := engine.ImportErrors(out); len(failed) > 0 {
+				run.Error = "the import reported failed statements, so not everything in the dump was loaded:\n" + strings.Join(failed, "\n")
+			}
 		}
 		return nil
 	})

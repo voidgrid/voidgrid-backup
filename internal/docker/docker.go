@@ -126,6 +126,14 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 // it returns io.EOF only if the command exited 0, otherwise an error
 // carrying the exit code and the tail of stderr.
 func (c *Client) Exec(ctx context.Context, containerID string, cmd, env []string, stdin io.Reader) (io.ReadCloser, error) {
+	return c.ExecStderr(ctx, containerID, cmd, env, stdin, nil)
+}
+
+// ExecStderr is Exec for a command whose stderr matters even when it exits 0,
+// such as a client that reports each failed statement there and carries on:
+// errOut, if not nil, is written everything the command writes to stderr. All
+// of it has been written by the time the returned reader ends.
+func (c *Client) ExecStderr(ctx context.Context, containerID string, cmd, env []string, stdin io.Reader, errOut io.Writer) (io.ReadCloser, error) {
 	var created struct {
 		ID string `json:"Id"`
 	}
@@ -168,7 +176,11 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd, env []string
 		defer stop()
 		defer closeConn()
 		var stderr tailBuffer
-		err := demux(br, pw, &stderr)
+		var errW io.Writer = &stderr
+		if errOut != nil {
+			errW = io.MultiWriter(&stderr, errOut)
+		}
+		err := demux(br, pw, errW)
 		if err == nil {
 			err = c.execResult(ctx, created.ID, cmd, &stderr)
 		}

@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -95,8 +98,9 @@ func (e *Engine) deleteSnapshots(ctx context.Context, r Repo, snapshotIDs []stri
 // no repository is found there (a wrong path would otherwise delete
 // nothing, or something else), and deletes the repository's format blob last,
 // so a wipe that fails halfway can be run again. Returns what was deleted.
-// Only Kopia's own blob files are listed, so unrelated files survive, and
-// the empty directories of a file-based store remain.
+// Only blobs with a name Kopia gives its own (see kopiaBlob) are deleted, so
+// unrelated files survive, and the empty directories of a file-based store
+// remain.
 func (e *Engine) Wipe(ctx context.Context, r Repo) (blobs, bytes int64, err error) {
 	if err := r.Config.Validate(); err != nil {
 		return 0, 0, err
@@ -124,6 +128,14 @@ func (e *Engine) Wipe(ctx context.Context, r Repo) (blobs, bytes int64, err erro
 		return ctx.Err()
 	}); err != nil {
 		return 0, 0, fmt.Errorf("list blobs: %w", err)
+	}
+	// Only what Kopia itself names is deleted. An S3 prefix is a plain string, so
+	// the listing also returns whatever else starts with it: another repository
+	// at "<prefix>2", or files of the operator's own at the bucket root.
+	listed := len(all)
+	all = slices.DeleteFunc(all, func(bm blob.Metadata) bool { return !kopiaBlob(bm.BlobID) })
+	if left := listed - len(all); left > 0 {
+		slog.Warn("repository wipe: left what is not this repository's", "repo", r.ID, "objects", left)
 	}
 	// The format blob goes last, once every other blob is gone.
 	var formatBlobs []blob.Metadata
@@ -166,6 +178,37 @@ func (e *Engine) Wipe(ctx context.Context, r Repo) (blobs, bytes int64, err erro
 		}
 	}
 	return blobs, bytes, nil
+}
+
+// kopiaBlobNames are the forms a Kopia blob ID takes (Kopia 0.23): pack,
+// session and old-style index blobs (a letter and a hex hash), the epoch index
+// blobs under "x", and the repository's logs. Every one is strict about where
+// its hex and its digits go, so a blob of a repository whose prefix merely
+// starts with this one's ("<prefix>2" + "kopia.repository") matches none.
+var kopiaBlobNames = []*regexp.Regexp{
+	regexp.MustCompile(`^[pqsnml][0-9a-f]+(-[0-9a-z]+)*$`),
+	regexp.MustCompile(`^x[ew][0-9]+$`),
+	regexp.MustCompile(`^x[ns][0-9]+_[0-9a-f]+(-[0-9a-z]+)*$`),
+	regexp.MustCompile(`^xr[0-9]+_[0-9]+_[0-9a-f]+(-[0-9a-z]+)*$`),
+	regexp.MustCompile(`^_log_[0-9]{14}_[0-9a-f]+_[0-9]+_[0-9]+_[0-9]+_[0-9a-f]*$`),
+}
+
+// kopiaBlob says whether id is a blob Kopia made: the only ones a wipe deletes.
+func kopiaBlob(id blob.ID) bool {
+	s := string(id)
+	switch s {
+	case format.KopiaRepositoryBlobID, format.KopiaBlobCfgBlobID, "kopia.maintenance":
+		return true
+	}
+	if rest, ok := strings.CutPrefix(s, format.BackupBlobIDPrefix); ok {
+		return rest != "" && !strings.ContainsAny(rest, "/ ")
+	}
+	for _, re := range kopiaBlobNames {
+		if re.MatchString(s) {
+			return true
+		}
+	}
+	return false
 }
 
 // wipeWorkers is how many blobs a wipe deletes at once. Each delete is a round

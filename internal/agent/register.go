@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -223,6 +224,64 @@ func (a *Agent) finishEnrollment(id string, certDER, caDER []byte) error {
 		return fmt.Errorf("save certificate: %w", err)
 	}
 	a.engine = eng
-	a.enrolled = &identity{id: id, cert: pki.TLSCert(certDER, a.key), cas: pool}
+	a.enrolled = &identity{id: id, cert: pki.TLSCert(certDER, a.key), ca: ca, cas: pool}
 	return nil
+}
+
+// RenewCertificate installs a newly issued certificate for this agent, and the
+// CA certificate that comes with it, in place of the ones it has. The server
+// sends them before the old ones expire. Nothing about who the agent is can
+// change this way: the certificate must be for this agent's ID and key, and
+// the CA must carry the same key as the CA the agent already trusts, which is
+// the only thing that could have signed either.
+func (a *Agent) RenewCertificate(_ context.Context, req *agentpb.RenewCertificateRequest) (*agentpb.RenewCertificateResponse, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	cur := a.enrolled
+	if cur == nil {
+		return nil, status.Error(codes.FailedPrecondition, "agent is not enrolled")
+	}
+	ca, caDER := cur.ca, []byte(nil)
+	if der := req.GetCaDer(); len(der) > 0 {
+		next, err := x509.ParseCertificate(der)
+		if err != nil || !next.IsCA {
+			return nil, status.Error(codes.InvalidArgument, "invalid CA certificate")
+		}
+		pub, ok := next.PublicKey.(interface{ Equal(crypto.PublicKey) bool })
+		if !ok || !pub.Equal(cur.ca.PublicKey) {
+			return nil, status.Error(codes.PermissionDenied, "the CA certificate is not for the CA this agent trusts")
+		}
+		if !next.Equal(cur.ca) {
+			ca, caDER = next, der
+		}
+	}
+	cert, err := x509.ParseCertificate(req.GetCertDer())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid agent certificate")
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(ca)
+	if _, err := cert.Verify(x509.VerifyOptions{
+		Roots:     pool,
+		DNSName:   pki.AgentDNSName(cur.id),
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "agent certificate does not verify: %v", err)
+	}
+	if cert.Subject.CommonName != cur.id || !a.key.PublicKey.Equal(cert.PublicKey) {
+		return nil, status.Error(codes.PermissionDenied, "agent certificate is not for this agent")
+	}
+	// The CA first: the certificate the agent still has verifies against the
+	// renewed CA too (same key), so stopping between the two writes is harmless.
+	if caDER != nil {
+		if err := pki.WriteCert(a.path(fileCA), caDER); err != nil {
+			return nil, status.Errorf(codes.Internal, "save CA: %v", err)
+		}
+	}
+	if err := pki.WriteCert(a.path(fileCert), cert.Raw); err != nil {
+		return nil, status.Errorf(codes.Internal, "save certificate: %v", err)
+	}
+	a.enrolled = &identity{id: cur.id, cert: pki.TLSCert(cert.Raw, a.key), ca: ca, cas: pool}
+	slog.Info("certificate renewed", "id", cur.id, "valid_until", cert.NotAfter.Format(time.RFC3339), "ca_renewed", caDER != nil)
+	return &agentpb.RenewCertificateResponse{}, nil
 }

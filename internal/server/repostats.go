@@ -125,6 +125,33 @@ func (c *Controller) agentForRepo(ctx context.Context, repoID string) (catalog.A
 			return c.Catalog.Agent(ctx, j.AgentID)
 		}
 	}
+	// No job yet: one of the agents assigned to it, a reachable one first. An
+	// agent that is not assigned is never sent the repository's password.
+	assigned, err := c.Catalog.RepositoryAgents(ctx, repoID)
+	if err != nil {
+		return catalog.Agent{}, err
+	}
+	var down *catalog.Agent
+	for _, id := range assigned {
+		a, err := c.Catalog.Agent(ctx, id)
+		if err != nil {
+			continue
+		}
+		if a.LastError == "" {
+			return a, nil
+		}
+		if down == nil {
+			down = &a
+		}
+	}
+	if down != nil {
+		return *down, nil
+	}
+	if len(assigned) > 0 || c.serverCreated(ctx, repoID) {
+		return catalog.Agent{}, errors.New("no agent is assigned to this repository")
+	}
+	// A repository from before assignments existed has none and is open to
+	// every agent (see ReposFor).
 	agents, err := c.Catalog.ListAgents(ctx)
 	if err != nil {
 		return catalog.Agent{}, err

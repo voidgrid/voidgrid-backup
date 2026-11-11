@@ -45,9 +45,11 @@ func (c *Controller) initFromServer(ctx context.Context, r catalog.Repository, g
 	if knownHosts != "" && r.Config.SFTP != nil {
 		r.Config.SFTP.KnownHosts = knownHosts
 	}
+	// The repository exists in storage now: a generated password goes back with
+	// any later error, since nothing else has it.
 	r.InitializedAt = time.Now()
 	if err := c.Catalog.MarkRepositoryInitialized(ctx, r.ID, r.Config, r.InitializedAt); err != nil {
-		return catalog.Repository{}, "", err
+		return r, generated, fmt.Errorf("the repository was created at %s, but recording it here failed: %w", r.Config.Location(), err)
 	}
 	if err := c.Catalog.SetSetting(ctx, repoServerCreatedKey(r.ID), "1"); err != nil {
 		return r, generated, err

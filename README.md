@@ -89,7 +89,9 @@ No local Go toolchain is needed: everything runs in containers.
   the server's nonroot user and writable `./data`, the agent's `cap_drop`/
   `cap_add` set — and confirms both health checks pass. Throwaway copies
   and a locally built image tag; nothing in `examples/` is touched.
-- CI runs vet and the tests inside the image build and publishes the image
+- CI runs lint, vet and the tests on every push to `main` and every pull
+  request (`.github/workflows/lint.yaml`, `test.yaml`). A version tag runs vet
+  and the tests again inside the image build and publishes the image
   to `ghcr.io` — the same `docker build` you'd run locally, just automated.
 
 ### What the live tests need

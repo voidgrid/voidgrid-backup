@@ -429,3 +429,102 @@ func TestNewRequiresSessionKey(t *testing.T) {
 		t.Fatal("short session key accepted")
 	}
 }
+
+// An address the provider has not verified identifies nobody, on the allowed
+// list or not. A provider that does not send the claim at all is not refused.
+func TestCallbackRefusesUnverifiedEmail(t *testing.T) {
+	a, p := newTestAuth(t, "boss@example.com")
+	transient := startLogin(t, a)
+	code := idTokenCode(t, p.baseURL, clientID, cookieValue(transient, oauthNonce), "boss@example.com", false)
+	rec := callback(a, transient, url.Values{"state": {cookieValue(transient, oauthState)}, "code": {code}})
+	if rec.Code != http.StatusForbidden || cookieValue(rec.Result().Cookies(), sessionCookie) != "" {
+		t.Fatalf("unverified email: status %d, cookies %+v", rec.Code, rec.Result().Cookies())
+	}
+}
+
+// memSignOuts is a SignOuts kept in memory.
+type memSignOuts map[string]time.Time
+
+func (m memSignOuts) SignedOutAt(_ context.Context, id string) (time.Time, error) { return m[id], nil }
+func (m memSignOuts) SignOut(_ context.Context, id string, at time.Time) error {
+	m[id] = at
+	return nil
+}
+
+func sessionFor(t *testing.T, a *Authenticator, identity string) *http.Cookie {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	a.IssueSession(rec, httptest.NewRequest("GET", "/", nil), identity)
+	return &http.Cookie{Name: sessionCookie, Value: cookieValue(rec.Result().Cookies(), sessionCookie)}
+}
+
+func signedIn(a *Authenticator, c *http.Cookie) bool {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(c)
+	_, ok := a.CurrentUser(req)
+	return ok
+}
+
+// Signing out ends the session on the server: a copy of the cookie is refused
+// afterwards, and signing in again works.
+func TestLogoutEndsTheSessionOnTheServer(t *testing.T) {
+	a, _ := newTestAuth(t)
+	a.SetSignOuts(memSignOuts{})
+	old := sessionFor(t, a, "person@example.com")
+	other := sessionFor(t, a, "other@example.com")
+	if !signedIn(a, old) {
+		t.Fatal("a fresh session is not accepted")
+	}
+	req := httptest.NewRequest("POST", "/auth/logout", nil)
+	req.AddCookie(old)
+	a.Logout(httptest.NewRecorder(), req)
+	if signedIn(a, old) {
+		t.Fatal("the cookie still works after signing out")
+	}
+	if !signedIn(a, other) {
+		t.Fatal("signing out ended somebody else's session")
+	}
+	if !signedIn(a, sessionFor(t, a, "person@example.com")) {
+		t.Fatal("a session started after signing out is refused")
+	}
+}
+
+// Taking an address off the allowed list ends its session; a recovery-code
+// session is not an address and stays.
+func TestSessionEndsWhenTakenOffTheAllowedList(t *testing.T) {
+	a, _ := newTestAuth(t, "boss@example.com")
+	boss, recovery := sessionFor(t, a, "boss@example.com"), sessionFor(t, a, RecoveryIdentity)
+	if !signedIn(a, boss) || !signedIn(a, recovery) {
+		t.Fatal("fresh sessions are not accepted")
+	}
+	cfg := a.cfg
+	cfg.AllowedEmails = []string{"someone-else@example.com"}
+	a2, err := New(context.Background(), cfg, a.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signedIn(a2, boss) {
+		t.Fatal("the session of an address taken off the allowed list still works")
+	}
+	if !signedIn(a2, recovery) {
+		t.Fatal("the allowed list ended a recovery-code session")
+	}
+}
+
+// A cookie from before sessions recorded their start keeps working, and signing
+// out ends it like any other.
+func TestOldSessionCookieStillWorks(t *testing.T) {
+	a, _ := newTestAuth(t)
+	a.SetSignOuts(memSignOuts{})
+	exp := strconv.FormatInt(time.Now().Add(sessionMaxAge).Unix(), 10)
+	old := &http.Cookie{Name: sessionCookie, Value: signToken(a.key, "person@example.com|"+exp)}
+	if !signedIn(a, old) {
+		t.Fatal("a cookie in the old form is refused")
+	}
+	req := httptest.NewRequest("POST", "/auth/logout", nil)
+	req.AddCookie(old)
+	a.Logout(httptest.NewRecorder(), req)
+	if signedIn(a, old) {
+		t.Fatal("a cookie in the old form still works after signing out")
+	}
+}

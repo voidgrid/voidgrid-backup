@@ -261,6 +261,11 @@ func (c *Controller) ApproveRegistration(ctx context.Context, regID, name, addre
 	}
 	fingerprint := hex.EncodeToString(pki.Fingerprint(certDER))
 	if replaceID != "" {
+		// A renewal that was under way was for the host being replaced: its new
+		// certificate must stop being accepted along with its old one.
+		if err := c.Catalog.SetSetting(ctx, agentNextCertKey(agentID), ""); err != nil {
+			return catalog.Agent{}, err
+		}
 		err = c.Catalog.ReplaceAgent(ctx, agentID, address, reg.Hostname, reg.Version, fingerprint)
 	} else {
 		err = c.Catalog.AddAgent(ctx, catalog.Agent{

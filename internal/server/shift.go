@@ -113,7 +113,7 @@ func (c *Controller) MoveSchedule(ctx context.Context, id, was string, minutes i
 		return "", err
 	}
 	j.Schedule = moved
-	return moved, c.Catalog.UpdateJob(ctx, j)
+	return moved, c.saveSchedule(ctx, j, was, j.Enabled)
 }
 
 // One-time conversion. Before v0.9.0-beta.14 every cron expression was read in

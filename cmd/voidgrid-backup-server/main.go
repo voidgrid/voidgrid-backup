@@ -41,7 +41,7 @@ func main() {
 	cacheMetadataMB := envflag.Int("cache-metadata-mb", "VB_CACHE_METADATA_MB", 256, "size limit in MiB, per repository, of the metadata cache")
 	ipv4Only := envflag.Bool("ipv4-only", "VB_IPV4_ONLY", false, "connect to SFTP and S3 storage over IPv4 only; for hosts without IPv6 whose resolver sometimes returns only an IPv6 address")
 	cacheContentMB := envflag.Int("cache-content-mb", "VB_CACHE_CONTENT_MB", 64, "size limit in MiB, per repository, of the file-data cache; 0 turns the whole cache off")
-	oidcIssuer := envflag.String("oidc-issuer", "VB_OIDC_ISSUER", "", "OIDC provider issuer URL; empty disables login and leaves every route open")
+	oidcIssuer := envflag.String("oidc-issuer", "VB_OIDC_ISSUER", "", "OIDC provider issuer URL; empty leaves OIDC off, and signing in is then by recovery code only")
 	oidcClientID := envflag.String("oidc-client-id", "VB_OIDC_CLIENT_ID", "", "OIDC client ID")
 	oidcClientSecret := envflag.String("oidc-client-secret", "VB_OIDC_CLIENT_SECRET", "", "OIDC client secret")
 	oidcRedirectURL := envflag.String("oidc-redirect-url", "VB_OIDC_REDIRECT_URL", "", "OIDC callback URL as the provider sees it, e.g. https://host/auth/callback")

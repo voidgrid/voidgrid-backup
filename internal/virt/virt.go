@@ -245,7 +245,12 @@ func (v *Libvirt) BlockCommit(ctx context.Context, name, disk string) error {
 		if err != nil {
 			return err
 		}
-		if err := l.DomainBlockCommit(d, disk, nil, nil, 0, libvirt.DomainBlockCommitActive|libvirt.DomainBlockCommitDelete); err != nil {
+		// Shallow: merge the overlay into the image directly under it and no
+		// further. Without it libvirt merges down to the bottom of the chain,
+		// which for a disk that has a backing image of its own (a linked clone)
+		// would write the clone's data into the image it shares with others.
+		flags := libvirt.DomainBlockCommitActive | libvirt.DomainBlockCommitDelete | libvirt.DomainBlockCommitShallow
+		if err := l.DomainBlockCommit(d, disk, nil, nil, 0, flags); err != nil {
 			return fmt.Errorf("blockcommit %s: %w", disk, err)
 		}
 		// Wait for the commit to reach the ready phase, then pivot.

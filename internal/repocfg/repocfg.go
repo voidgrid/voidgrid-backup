@@ -145,6 +145,26 @@ func (c Config) Identity() string {
 	return ""
 }
 
+// SharesS3Listing says whether c and o are S3 repositories in one bucket whose
+// prefixes are different but list each other's objects. A prefix is a plain
+// string, not a directory: "nas" also matches every object of "nas2" or
+// "nas-old", so maintenance or a wipe of one repository would see the other's
+// blobs as its own. Prefixes are apart once a "/" separates them ("nas/" and
+// "nas2/", or "" and "nas/"). The same prefix is not this case: Identity
+// covers it.
+func (c Config) SharesS3Listing(o Config) bool {
+	if c.S3 == nil || o.S3 == nil || c.S3.Bucket != o.S3.Bucket ||
+		!strings.EqualFold(strings.TrimRight(c.S3.Endpoint, "/"), strings.TrimRight(o.S3.Endpoint, "/")) {
+		return false
+	}
+	short, long := c.S3.Prefix, o.S3.Prefix
+	if len(short) > len(long) {
+		short, long = long, short
+	}
+	rest, ok := strings.CutPrefix(long, short)
+	return ok && rest != "" && !strings.Contains(rest, "/")
+}
+
 // ForAgent is the config as the given agent sees it: without the server-only
 // path, and with the SFTP key path that applies to that agent (its entry in
 // KeyFiles, else the default). An empty agentID gives the default for all.

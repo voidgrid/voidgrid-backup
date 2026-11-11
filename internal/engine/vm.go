@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	kfs "github.com/kopia/kopia/fs"
@@ -84,6 +85,35 @@ func (e *Engine) backupVM(ctx context.Context, rep repo.Repository, hv virt.Hype
 	dom, err := hv.Domain(ctx, spec.Name)
 	if err != nil {
 		return fail(err)
+	}
+	// A backup that was cut short (the agent killed, the host rebooted) leaves
+	// the domain running on the overlay it made. Reading that overlay as the disk
+	// would save a few megabytes of changes and call it the VM, so it is merged
+	// back first; if it cannot be, nothing is backed up.
+	if left := leftoverOverlays(dom); len(left) > 0 {
+		if !dom.Active() {
+			return fail(fmt.Errorf("ACTION NEEDED: %s is shut off on an overlay an interrupted backup left behind (%s); merge it into its backing image (qemu-img commit) and point the disk back at that image, then run the backup again",
+				dom.Name, strings.Join(left, ", ")))
+		}
+		for _, d := range dom.Disks {
+			if !isLeftoverOverlay(d) {
+				continue
+			}
+			if err := hv.BlockCommit(ctx, dom.Name, d.Target); err != nil {
+				return fail(fmt.Errorf("ACTION NEEDED: disk %s of %s runs on overlay %s, left by an interrupted backup, and merging it back failed (virsh blockcommit %s %s --active --pivot): %w",
+					d.Target, dom.Name, d.Source, dom.Name, d.Target, err))
+			}
+			if w := removeLeftoverOverlay(d.Source); w != "" {
+				res.Warnings = append(res.Warnings, w)
+			}
+		}
+		if dom, err = hv.Domain(ctx, spec.Name); err != nil {
+			return fail(err)
+		}
+		if still := leftoverOverlays(dom); len(still) > 0 {
+			return fail(fmt.Errorf("ACTION NEEDED: %s still runs on an overlay an interrupted backup left behind (%s) after merging it back", dom.Name, strings.Join(still, ", ")))
+		}
+		res.Warnings = append(res.Warnings, "an earlier backup was interrupted and left "+strings.Join(left, ", ")+"; it was merged back into the disk before this backup")
 	}
 	inactiveXML, err := hv.XML(ctx, spec.Name, true)
 	if err != nil {
@@ -164,6 +194,26 @@ func (e *Engine) backupVM(ctx context.Context, rep repo.Repository, hv virt.Hype
 	res = e.takeSnapshot(ctx, rep, si, root, nil, keep, around, res)
 	res.Warnings = append(res.Warnings, overlayWarnings...)
 	return res
+}
+
+// overlayName matches the overlay files withOverlays creates: the disk's own
+// path, ".vb-" and the Unix time.
+var overlayName = regexp.MustCompile(`\.vb-[0-9]+$`)
+
+// isLeftoverOverlay says whether the disk is running on an overlay of ours.
+func isLeftoverOverlay(d virt.Disk) bool {
+	return d.Backing && overlayName.MatchString(d.Source)
+}
+
+// leftoverOverlays lists the overlays of ours the domain's disks are on.
+func leftoverOverlays(dom virt.Domain) []string {
+	var out []string
+	for _, d := range dom.Disks {
+		if isLeftoverOverlay(d) {
+			out = append(out, d.Source)
+		}
+	}
+	return out
 }
 
 // withOverlays puts every chosen disk of a running domain onto a temporary

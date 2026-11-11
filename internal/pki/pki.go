@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -65,7 +66,26 @@ func LoadOrCreateCA(dir string) (*CA, error) {
 		if !key.PublicKey.Equal(cert.PublicKey) {
 			return nil, fmt.Errorf("%s does not match %s", keyPath, certPath)
 		}
-		return &CA{Cert: cert, Key: key}, nil
+		if time.Until(cert.NotAfter) > caRenewBefore {
+			return &CA{Cert: cert, Key: key}, nil
+		}
+		// Close to its end: a new certificate for the same key. Everything the
+		// old one signed still verifies against it, and agents take the new one
+		// with their next certificate renewal (they accept a CA with the same key).
+		der, err := caCertificate(key)
+		if err != nil {
+			return nil, err
+		}
+		if err := WriteCert(certPath, der); err != nil {
+			return nil, err
+		}
+		renewed, err := x509.ParseCertificate(der)
+		if err != nil {
+			return nil, err
+		}
+		slog.Warn("the CA certificate was close to expiring and has been renewed with the same key",
+			"was_valid_until", cert.NotAfter.Format(time.RFC3339), "valid_until", renewed.NotAfter.Format(time.RFC3339))
+		return &CA{Cert: renewed, Key: key}, nil
 	}
 
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -75,22 +95,7 @@ func LoadOrCreateCA(dir string) (*CA, error) {
 	if err != nil {
 		return nil, err
 	}
-	serial, err := newSerial()
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now()
-	tmpl := &x509.Certificate{
-		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: "voidgrid-backup CA"},
-		NotBefore:             now.Add(-time.Hour),
-		NotAfter:              now.AddDate(20, 0, 0),
-		IsCA:                  true,
-		BasicConstraintsValid: true,
-		MaxPathLenZero:        true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	der, err := caCertificate(key)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +111,45 @@ func LoadOrCreateCA(dir string) (*CA, error) {
 		return nil, err
 	}
 	return &CA{Cert: cert, Key: key}, nil
+}
+
+// How long before a certificate expires it is replaced. The server checks its
+// own at every start, and each agent's every time it reaches the agent.
+const (
+	caRenewBefore       = 2 * 365 * 24 * time.Hour
+	clientRenewBefore   = 365 * 24 * time.Hour
+	registryRenewBefore = 30 * 24 * time.Hour
+)
+
+// AgentRenewBefore is how long before an agent's certificate expires the
+// server issues it a new one.
+const AgentRenewBefore = 365 * 24 * time.Hour
+
+// caCertificate self-signs a CA certificate for key, valid 20 years from now.
+func caCertificate(key *ecdsa.PrivateKey) ([]byte, error) {
+	serial, err := newSerial()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	tmpl := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "voidgrid-backup CA"},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.AddDate(20, 0, 0),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		MaxPathLenZero:        true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	return x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+}
+
+// expiresWithin says whether the certificate at certPath ends within d (or
+// cannot be read, which the caller's load then reports).
+func expiresWithin(certPath string, d time.Duration) bool {
+	cert, err := ReadCert(certPath)
+	return err == nil && time.Until(cert.NotAfter) <= d
 }
 
 // SignAgentKey issues an agent certificate for agentID over pub, the public
@@ -137,10 +181,14 @@ func (ca *CA) SignAgentKey(agentID string, pub crypto.PublicKey) ([]byte, error)
 // (server.crt/server.key in dir), issuing it from ca on first use.
 func LoadOrCreateClientCert(dir string, ca *CA) (tls.Certificate, error) {
 	certPath, keyPath := filepath.Join(dir, "server.crt"), filepath.Join(dir, "server.key")
+	// One that is close to its end is issued again, with a new key: agents
+	// accept any certificate of this name that the CA signed.
 	if exists, err := fileExists(certPath); err != nil {
 		return tls.Certificate{}, err
-	} else if exists {
+	} else if exists && !expiresWithin(certPath, clientRenewBefore) {
 		return tls.LoadX509KeyPair(certPath, keyPath)
+	} else if exists {
+		slog.Warn("the server's client certificate was close to expiring and is being renewed")
 	}
 
 	key, err := NewKey()
@@ -180,10 +228,15 @@ func LoadOrCreateClientCert(dir string, ca *CA) (tls.Certificate, error) {
 // no public certificate.
 func LoadOrCreateServerTLSCert(dir string) (tls.Certificate, error) {
 	certPath, keyPath := filepath.Join(dir, "registry.crt"), filepath.Join(dir, "registry.key")
+	// One that is about to end is made again. That changes the registration
+	// token, which pins it: only agents that have not registered yet need the
+	// new token, and the Agents page shows it.
 	if exists, err := fileExists(certPath); err != nil {
 		return tls.Certificate{}, err
-	} else if exists {
+	} else if exists && !expiresWithin(certPath, registryRenewBefore) {
 		return tls.LoadX509KeyPair(certPath, keyPath)
+	} else if exists {
+		slog.Warn("the registration certificate was about to expire and is being renewed: the registration token has changed, copy the new one to agents that have not registered yet")
 	}
 	key, err := NewKey()
 	if err != nil {

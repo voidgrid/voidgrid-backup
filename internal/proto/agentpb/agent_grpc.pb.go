@@ -19,28 +19,29 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Agent_Ping_FullMethodName            = "/voidgridbackup.agent.v1.Agent/Ping"
-	Agent_InitRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/InitRepository"
-	Agent_Backup_FullMethodName          = "/voidgridbackup.agent.v1.Agent/Backup"
-	Agent_Progress_FullMethodName        = "/voidgridbackup.agent.v1.Agent/Progress"
-	Agent_ListSnapshots_FullMethodName   = "/voidgridbackup.agent.v1.Agent/ListSnapshots"
-	Agent_ListDirectory_FullMethodName   = "/voidgridbackup.agent.v1.Agent/ListDirectory"
-	Agent_Restore_FullMethodName         = "/voidgridbackup.agent.v1.Agent/Restore"
-	Agent_ListStacks_FullMethodName      = "/voidgridbackup.agent.v1.Agent/ListStacks"
-	Agent_RestoreStack_FullMethodName    = "/voidgridbackup.agent.v1.Agent/RestoreStack"
-	Agent_ImportDump_FullMethodName      = "/voidgridbackup.agent.v1.Agent/ImportDump"
-	Agent_ListVMs_FullMethodName         = "/voidgridbackup.agent.v1.Agent/ListVMs"
-	Agent_RestoreVM_FullMethodName       = "/voidgridbackup.agent.v1.Agent/RestoreVM"
-	Agent_Check_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Check"
-	Agent_DeleteSnapshot_FullMethodName  = "/voidgridbackup.agent.v1.Agent/DeleteSnapshot"
-	Agent_WipeRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/WipeRepository"
-	Agent_Maintain_FullMethodName        = "/voidgridbackup.agent.v1.Agent/Maintain"
-	Agent_TestRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/TestRepository"
-	Agent_TakeMaintenance_FullMethodName = "/voidgridbackup.agent.v1.Agent/TakeMaintenance"
-	Agent_MoveRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/MoveRepository"
-	Agent_PathUsage_FullMethodName       = "/voidgridbackup.agent.v1.Agent/PathUsage"
-	Agent_RepoStats_FullMethodName       = "/voidgridbackup.agent.v1.Agent/RepoStats"
-	Agent_Logs_FullMethodName            = "/voidgridbackup.agent.v1.Agent/Logs"
+	Agent_Ping_FullMethodName             = "/voidgridbackup.agent.v1.Agent/Ping"
+	Agent_RenewCertificate_FullMethodName = "/voidgridbackup.agent.v1.Agent/RenewCertificate"
+	Agent_InitRepository_FullMethodName   = "/voidgridbackup.agent.v1.Agent/InitRepository"
+	Agent_Backup_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Backup"
+	Agent_Progress_FullMethodName         = "/voidgridbackup.agent.v1.Agent/Progress"
+	Agent_ListSnapshots_FullMethodName    = "/voidgridbackup.agent.v1.Agent/ListSnapshots"
+	Agent_ListDirectory_FullMethodName    = "/voidgridbackup.agent.v1.Agent/ListDirectory"
+	Agent_Restore_FullMethodName          = "/voidgridbackup.agent.v1.Agent/Restore"
+	Agent_ListStacks_FullMethodName       = "/voidgridbackup.agent.v1.Agent/ListStacks"
+	Agent_RestoreStack_FullMethodName     = "/voidgridbackup.agent.v1.Agent/RestoreStack"
+	Agent_ImportDump_FullMethodName       = "/voidgridbackup.agent.v1.Agent/ImportDump"
+	Agent_ListVMs_FullMethodName          = "/voidgridbackup.agent.v1.Agent/ListVMs"
+	Agent_RestoreVM_FullMethodName        = "/voidgridbackup.agent.v1.Agent/RestoreVM"
+	Agent_Check_FullMethodName            = "/voidgridbackup.agent.v1.Agent/Check"
+	Agent_DeleteSnapshot_FullMethodName   = "/voidgridbackup.agent.v1.Agent/DeleteSnapshot"
+	Agent_WipeRepository_FullMethodName   = "/voidgridbackup.agent.v1.Agent/WipeRepository"
+	Agent_Maintain_FullMethodName         = "/voidgridbackup.agent.v1.Agent/Maintain"
+	Agent_TestRepository_FullMethodName   = "/voidgridbackup.agent.v1.Agent/TestRepository"
+	Agent_TakeMaintenance_FullMethodName  = "/voidgridbackup.agent.v1.Agent/TakeMaintenance"
+	Agent_MoveRepository_FullMethodName   = "/voidgridbackup.agent.v1.Agent/MoveRepository"
+	Agent_PathUsage_FullMethodName        = "/voidgridbackup.agent.v1.Agent/PathUsage"
+	Agent_RepoStats_FullMethodName        = "/voidgridbackup.agent.v1.Agent/RepoStats"
+	Agent_Logs_FullMethodName             = "/voidgridbackup.agent.v1.Agent/Logs"
 )
 
 // AgentClient is the client API for Agent service.
@@ -54,6 +55,9 @@ const (
 // that it requires a client cert signed by the server's CA.
 type AgentClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
+	// Replaces the agent's certificate, and the CA certificate it trusts, with
+	// newly issued ones for the same keys, before the old ones expire.
+	RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error)
 	// Backup repository operations. The server sends the repository config and
 	// password with every call; the agent keeps only a local Kopia cache.
 	InitRepository(ctx context.Context, in *InitRepositoryRequest, opts ...grpc.CallOption) (*InitRepositoryResponse, error)
@@ -113,6 +117,16 @@ func (c *agentClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.Ca
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PingResponse)
 	err := c.cc.Invoke(ctx, Agent_Ping_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentClient) RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewCertificateResponse)
+	err := c.cc.Invoke(ctx, Agent_RenewCertificate_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -340,6 +354,9 @@ func (c *agentClient) Logs(ctx context.Context, in *LogsRequest, opts ...grpc.Ca
 // that it requires a client cert signed by the server's CA.
 type AgentServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
+	// Replaces the agent's certificate, and the CA certificate it trusts, with
+	// newly issued ones for the same keys, before the old ones expire.
+	RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error)
 	// Backup repository operations. The server sends the repository config and
 	// password with every call; the agent keeps only a local Kopia cache.
 	InitRepository(context.Context, *InitRepositoryRequest) (*InitRepositoryResponse, error)
@@ -397,6 +414,9 @@ type UnimplementedAgentServer struct{}
 
 func (UnimplementedAgentServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (UnimplementedAgentServer) RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenewCertificate not implemented")
 }
 func (UnimplementedAgentServer) InitRepository(context.Context, *InitRepositoryRequest) (*InitRepositoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitRepository not implemented")
@@ -496,6 +516,24 @@ func _Agent_Ping_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentServer).Ping(ctx, req.(*PingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Agent_RenewCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewCertificateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).RenewCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_RenewCertificate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).RenewCertificate(ctx, req.(*RenewCertificateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -888,6 +926,10 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _Agent_Ping_Handler,
+		},
+		{
+			MethodName: "RenewCertificate",
+			Handler:    _Agent_RenewCertificate_Handler,
 		},
 		{
 			MethodName: "InitRepository",

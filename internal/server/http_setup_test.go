@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
@@ -220,5 +222,36 @@ func TestSetupTokenStableAcrossCalls(t *testing.T) {
 	b, err := c.SetupToken(ctx)
 	if err != nil || a != b {
 		t.Fatalf("setup token not stable: %q vs %q (%v)", a, b, err)
+	}
+}
+
+// A recovery code works once, however many requests present it at the same
+// moment.
+func TestRecoveryCodeWorksOnceUnderConcurrentUse(t *testing.T) {
+	c := newController(t)
+	ctx := context.Background()
+	for round := 0; round < 20; round++ {
+		codes, err := c.GenerateRecoveryCodes(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var accepted atomic.Int32
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := 0; i < 16; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				if ok, err := c.VerifyRecoveryCode(ctx, codes[0]); err == nil && ok {
+					accepted.Add(1)
+				}
+			}()
+		}
+		close(start)
+		wg.Wait()
+		if n := accepted.Load(); n != 1 {
+			t.Fatalf("round %d: the code was accepted %d times", round, n)
+		}
 	}
 }

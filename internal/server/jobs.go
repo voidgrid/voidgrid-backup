@@ -142,9 +142,12 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 	if resp.GetKnownHosts() != "" && r.Config.SFTP != nil {
 		r.Config.SFTP.KnownHosts = resp.GetKnownHosts()
 	}
+	// From here on the repository exists in storage. Whatever fails next, a
+	// generated password goes back with the error: it is the only key to what
+	// was just created, and nothing else has it.
 	r.InitializedAt = time.Now()
 	if err := c.Catalog.MarkRepositoryInitialized(ctx, id, r.Config, r.InitializedAt); err != nil {
-		return catalog.Repository{}, "", err
+		return r, generated, fmt.Errorf("the repository was created at %s, but recording it here failed: %w", r.Config.Location(), err)
 	}
 	if err := c.Catalog.AssignAgent(ctx, id, agent.ID); err != nil {
 		return r, generated, err
@@ -307,7 +310,7 @@ func (c *Controller) UpdateJob(ctx context.Context, id string, in JobInput) (cat
 	if j.Kind != old.Kind {
 		return catalog.Job{}, fmt.Errorf("this is a %s job; its kind can't change", old.Kind)
 	}
-	return j, c.Catalog.UpdateJob(ctx, j)
+	return j, c.saveSchedule(ctx, j, old.Schedule, old.Enabled)
 }
 
 // SetSchedule changes a job's cron schedule and nothing else; blank means
@@ -321,13 +324,14 @@ func (c *Controller) SetSchedule(ctx context.Context, id, schedule string) error
 	if err != nil {
 		return err
 	}
+	was := j.Schedule
 	j.Schedule = strings.TrimSpace(schedule)
 	if j.Schedule != "" {
 		if _, err := cron.ParseStandard(j.Schedule); err != nil {
 			return fmt.Errorf("invalid schedule: %w", err)
 		}
 	}
-	return c.Catalog.UpdateJob(ctx, j)
+	return c.saveSchedule(ctx, j, was, j.Enabled)
 }
 
 // RunJob backs up a job now and records the run. It blocks until the backup

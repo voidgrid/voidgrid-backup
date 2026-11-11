@@ -124,6 +124,8 @@ func (c *Controller) SetupToken(ctx context.Context) (string, error) {
 // working), and returns the plaintext codes -- shown to the operator
 // exactly once, like a generated repository password.
 func (c *Controller) GenerateRecoveryCodes(ctx context.Context) ([]string, error) {
+	c.recoveryMu.Lock()
+	defer c.recoveryMu.Unlock()
 	plain := make([]string, numRecoveryCodes)
 	batch := recoveryCodeBatch{GeneratedAt: time.Now()}
 	for i := range plain {
@@ -146,6 +148,8 @@ func (c *Controller) GenerateRecoveryCodes(ctx context.Context) ([]string, error
 // reused or unknown code returns false, never an error just for not
 // matching.
 func (c *Controller) VerifyRecoveryCode(ctx context.Context, code string) (bool, error) {
+	c.recoveryMu.Lock()
+	defer c.recoveryMu.Unlock()
 	raw, err := c.Catalog.GetSetting(ctx, settingRecoveryCodes)
 	if err != nil || raw == "" {
 		return false, err

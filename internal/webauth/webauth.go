@@ -75,7 +75,29 @@ type Authenticator struct {
 	oauth       oauth2.Config
 	allowed     map[string]bool // lowercased emails; nil means allow any
 	key         []byte          // HMAC key for session/transient cookies
+	signOuts    SignOuts        // nil: signing out only clears the browser's cookie
 }
+
+// RecoveryIdentity is the identity of a session started with a recovery code.
+// It is not an email address, so the allowed list does not apply to it.
+const RecoveryIdentity = "recovery code"
+
+// SignOuts remembers when each identity last signed out. A session cookie is
+// self-contained (signed, with its own expiry), so clearing it in one browser
+// does not stop a copy of it from working: what ends it is a record, kept by
+// the server, that sessions of that identity started before a given moment no
+// longer count.
+type SignOuts interface {
+	// SignedOutAt is when identity last signed out, zero if it never did.
+	SignedOutAt(ctx context.Context, identity string) (time.Time, error)
+	// SignOut records that every session of identity started up to at is over.
+	SignOut(ctx context.Context, identity string, at time.Time) error
+}
+
+// SetSignOuts makes Logout end the session on the server too, and CurrentUser
+// refuse a session that was signed out. Call it before the Authenticator
+// serves requests.
+func (a *Authenticator) SetSignOuts(s SignOuts) { a.signOuts = s }
 
 // New returns an Authenticator ready to protect routes. key signs session
 // cookies; use LoadOrCreateSessionKey to persist one across restarts. If
@@ -155,7 +177,8 @@ func (a *Authenticator) CompleteOIDC(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout ends the current session, however it was obtained (OIDC or a
-// recovery code).
+// recovery code): it clears the cookie and, with SetSignOuts, records the
+// sign-out so the cookie is refused from then on.
 func (a *Authenticator) Logout(w http.ResponseWriter, r *http.Request) {
 	a.handleLogout(w, r)
 }
@@ -197,10 +220,16 @@ func wantsJSON(r *http.Request) bool {
 // login would. It's exported so another sign-in path this package doesn't
 // know about (a recovery code, say) can grant the same kind of session.
 func (a *Authenticator) IssueSession(w http.ResponseWriter, r *http.Request, identity string) {
+	// "|" separates the fields of the session payload.
+	identity = strings.ReplaceAll(identity, "|", "")
 	a.setCookie(w, r, sessionCookie, sessionToken(a.key, identity), sessionMaxAge)
 }
 
-// CurrentUser returns the signed-in identity, if any.
+// CurrentUser returns the signed-in identity, if any. A session stops counting
+// when it expires, when its identity signed out after it started (see
+// SignOuts), and, for one started through OIDC, when its email address is no
+// longer on the allowed list: taking someone off the list ends their session,
+// not only their next sign-in.
 func (a *Authenticator) CurrentUser(r *http.Request) (email string, ok bool) {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
@@ -210,15 +239,44 @@ func (a *Authenticator) CurrentUser(r *http.Request) (email string, ok bool) {
 	if !ok {
 		return "", false
 	}
-	email, expiry, ok := strings.Cut(payload, "|")
-	if !ok {
+	email, issued, exp, ok := parseSession(payload)
+	if !ok || time.Now().Unix() > exp {
 		return "", false
 	}
-	exp, err := strconv.ParseInt(expiry, 10, 64)
-	if err != nil || time.Now().Unix() > exp {
+	if email != RecoveryIdentity && a.allowed != nil && !a.allowed[strings.ToLower(email)] {
 		return "", false
+	}
+	if a.signOuts != nil {
+		at, err := a.signOuts.SignedOutAt(r.Context(), email)
+		if err != nil || (!at.IsZero() && !issued.After(at)) {
+			return "", false // not being able to tell counts as signed out
+		}
 	}
 	return email, true
+}
+
+// parseSession reads a session payload: "identity|expiry|issued", the expiry
+// in Unix seconds and the start in Unix nanoseconds. A cookie from before
+// sessions recorded their start is "identity|expiry"; it started a full session
+// lifetime before it expires.
+func parseSession(payload string) (identity string, issued time.Time, exp int64, ok bool) {
+	parts := strings.Split(payload, "|")
+	switch len(parts) {
+	case 2:
+		exp, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return "", time.Time{}, 0, false
+		}
+		return parts[0], time.Unix(exp, 0).Add(-sessionMaxAge), exp, true
+	case 3:
+		exp, err1 := strconv.ParseInt(parts[1], 10, 64)
+		iat, err2 := strconv.ParseInt(parts[2], 10, 64)
+		if err1 != nil || err2 != nil {
+			return "", time.Time{}, 0, false
+		}
+		return parts[0], time.Unix(0, iat), exp, true
+	}
+	return "", time.Time{}, 0, false // an identity never holds a "|": see IssueSession
 }
 
 func (a *Authenticator) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -294,11 +352,23 @@ func (a *Authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var claims struct {
-		Email         string `json:"email"`
-		EmailVerified bool   `json:"email_verified"`
+		Email string `json:"email"`
+		// A pointer, because not every provider sends the claim: only one that
+		// says outright that the address is not verified is refused.
+		EmailVerified *bool `json:"email_verified"`
 	}
 	if err := idToken.Claims(&claims); err != nil || claims.Email == "" {
 		fail(http.StatusBadGateway, "provider did not return an email claim", err)
+		return
+	}
+	if claims.EmailVerified != nil && !*claims.EmailVerified {
+		// Anyone can type any address into a provider that lets its users edit
+		// their own; until the provider has verified it, it identifies nobody.
+		fail(http.StatusForbidden, "the provider says this email address is not verified: "+claims.Email, nil)
+		return
+	}
+	if claims.Email == RecoveryIdentity || strings.Contains(claims.Email, "|") {
+		fail(http.StatusForbidden, "not a usable email address: "+claims.Email, nil)
 		return
 	}
 	if a.allowed != nil && !a.allowed[strings.ToLower(claims.Email)] {
@@ -316,6 +386,14 @@ func (a *Authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Authenticator) handleLogout(w http.ResponseWriter, r *http.Request) {
+	// End it on the server as well, so a copy of the cookie stops working. This
+	// signs the identity out everywhere it is signed in.
+	if identity, ok := a.CurrentUser(r); ok && a.signOuts != nil {
+		if err := a.signOuts.SignOut(r.Context(), identity, time.Now()); err != nil {
+			http.Error(w, "could not sign out: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 	a.clearCookie(w, r, sessionCookie)
 	http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 }
@@ -331,7 +409,8 @@ func randomToken() (string, error) {
 }
 
 func sessionToken(key []byte, email string) string {
-	payload := email + "|" + strconv.FormatInt(time.Now().Add(sessionMaxAge).Unix(), 10)
+	now := time.Now()
+	payload := email + "|" + strconv.FormatInt(now.Add(sessionMaxAge).Unix(), 10) + "|" + strconv.FormatInt(now.UnixNano(), 10)
 	return signToken(key, payload)
 }
 

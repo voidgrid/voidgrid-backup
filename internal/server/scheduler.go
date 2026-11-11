@@ -13,7 +13,10 @@ import (
 
 // NextRun is when a scheduled job is next due: the first schedule time after
 // its last backup (or after it was created, if it never ran). A time in the
-// past means it is due now; missed runs collapse into one.
+// past means it is due now; missed runs collapse into one. A schedule that was
+// changed, or switched back on, counts from that moment, so a new time of day
+// that has already passed today waits for tomorrow, and a job that was off for
+// a week does not run the instant it is switched on.
 func NextRun(ctx context.Context, cat *catalog.Catalog, j catalog.Job) (time.Time, error) {
 	from := j.CreatedAt
 	if last, err := cat.LastRun(ctx, j.ID, "backup"); err == nil {
@@ -21,7 +24,56 @@ func NextRun(ctx context.Context, cat *catalog.Catalog, j catalog.Job) (time.Tim
 	} else if !errors.Is(err, catalog.ErrNotFound) {
 		return time.Time{}, err
 	}
+	if changed := scheduleChangedAt(ctx, cat, j.ID); changed.After(from) {
+		from = changed
+	}
 	return nextRun(j.Schedule, from)
+}
+
+func scheduleChangedKey(jobID string) string { return "schedule_changed:" + jobID }
+
+// scheduleChangedAt is when the job's schedule was last changed, zero if it
+// never was (or the record cannot be read: the job is then scheduled as before).
+func scheduleChangedAt(ctx context.Context, cat *catalog.Catalog, jobID string) time.Time {
+	v, err := cat.GetSetting(ctx, scheduleChangedKey(jobID))
+	if err != nil || v == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339Nano, v)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// saveSchedule stores j, whose schedule an operator may just have changed from
+// was, or switched on (wasEnabled says whether it was on before). Either is
+// noted with the time, which NextRun counts from.
+func (c *Controller) saveSchedule(ctx context.Context, j catalog.Job, was string, wasEnabled bool) error {
+	if err := c.Catalog.UpdateJob(ctx, j); err != nil {
+		return err
+	}
+	if j.Schedule == was && (wasEnabled || !j.Enabled) {
+		return nil
+	}
+	return c.noteScheduleChange(ctx, j.ID)
+}
+
+func (c *Controller) noteScheduleChange(ctx context.Context, jobID string) error {
+	return c.Catalog.SetSetting(ctx, scheduleChangedKey(jobID), time.Now().UTC().Format(time.RFC3339Nano))
+}
+
+// SetJobEnabled switches a job's schedule on or off. Switching it on counts as
+// a schedule change: the job waits for its next scheduled start instead of
+// running at once for the starts it missed while it was off.
+func (c *Controller) SetJobEnabled(ctx context.Context, id string, enabled bool) error {
+	if err := c.Catalog.SetJobEnabled(ctx, id, enabled); err != nil {
+		return err
+	}
+	if !enabled {
+		return nil
+	}
+	return c.noteScheduleChange(ctx, id)
 }
 
 // nextRun is the first time after from that the cron expression matches, in the

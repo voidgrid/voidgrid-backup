@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http/httptest"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
 	"github.com/voidgrid/voidgrid-backup/internal/sftptest"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func withServerEngine(t *testing.T, c *Controller) {
@@ -202,5 +204,44 @@ func TestAddFormDefaultsThePathFromTheHostname(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Errorf("the add form is missing %q", want)
 		}
+	}
+}
+
+// When recording a repository fails after it was created with a generated
+// password, the password comes back with the error: nothing else has it.
+func TestGeneratedPasswordSurvivesAFailureAfterCreating(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "catalog.db")
+	cat, err := catalog.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { tidy.CloseWarn("catalog", cat) })
+	eng, err := engine.New(filepath.Join(dir, "kopia"), EngineHost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Controller{Catalog: cat, Engine: eng}
+	// The write that follows a successful create fails, as on a full disk.
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TRIGGER fail_update BEFORE UPDATE ON repositories BEGIN SELECT RAISE(FAIL, 'disk full'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(dir, "store")
+	cfg := repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: store, ServerPath: store}}
+	_, generated, err := c.AddRepository(ctx, "r", cfg, "", ServerHost)
+	if err == nil || generated == "" {
+		t.Fatalf("err=%v, generated password returned=%v", err, generated != "")
+	}
+	// It is the password of what is in storage.
+	if _, err := eng.Inspect(ctx, engine.Repo{ID: "check", Config: repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: store}}, Password: generated}); err != nil {
+		t.Fatalf("the returned password does not open the repository: %v", err)
 	}
 }

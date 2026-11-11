@@ -54,7 +54,7 @@ func (u *ui) recoveryLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		u.render(w, http.StatusUnauthorized, "recovery-login", p)
 		return
 	}
-	u.c.Auth().IssueSession(w, r, "recovery code")
+	u.c.Auth().IssueSession(w, r, webauth.RecoveryIdentity)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

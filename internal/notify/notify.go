@@ -127,7 +127,7 @@ func Send(ctx context.Context, cfg Config, ev Event) []Result {
 		out = append(out, Result{Channel: "Discord", Err: err, Detail: d})
 	}
 	if cfg.Email.enabled() {
-		out = append(out, Result{Channel: "Email", Err: sendEmail(cfg.Email, cfg, ev)})
+		out = append(out, Result{Channel: "Email", Err: sendEmail(ctx, cfg.Email, cfg, ev)})
 	}
 	return out
 }
@@ -191,6 +191,10 @@ func postJSON(ctx context.Context, url string, body any) (string, error) {
 	return detail, nil
 }
 
+// emailTimeout bounds one email, from connecting to the server's last answer.
+// A variable so that tests can shorten it.
+var emailTimeout = 30 * time.Second
+
 // maxReply bounds how much of a service's answer is kept.
 const maxReply = 512
 
@@ -241,21 +245,38 @@ func sendDiscord(ctx context.Context, cfg Config, ev Event) (string, error) {
 
 // sendEmail sends a plain-text message over SMTP: implicit TLS or
 // opportunistic STARTTLS, then AUTH PLAIN if a username is configured.
-func sendEmail(c *EmailConfig, cfg Config, ev Event) error {
+//
+// The whole exchange has emailTimeout, or until ctx ends if that is sooner: a
+// mail server that accepts the connection and then says nothing must not hold
+// up the run that is waiting to report.
+func sendEmail(ctx context.Context, c *EmailConfig, cfg Config, ev Event) error {
+	ctx, cancel := context.WithTimeout(ctx, emailTimeout)
+	defer cancel()
 	addr := net.JoinHostPort(c.Host, fmt.Sprint(c.Port))
 	var conn net.Conn
 	var err error
 	if c.ImplicitTLS {
-		conn, err = tls.Dial("tcp", addr, &tls.Config{ServerName: c.Host})
+		d := tls.Dialer{Config: &tls.Config{ServerName: c.Host}}
+		conn, err = d.DialContext(ctx, "tcp", addr)
 	} else {
-		conn, err = net.Dial("tcp", addr)
+		var d net.Dialer
+		conn, err = d.DialContext(ctx, "tcp", addr)
 	}
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
+	// When the time is up, or ctx ends, every read and write that is waiting or
+	// follows fails at once, STARTTLS included: it is the same connection
+	// underneath.
+	stop := context.AfterFunc(ctx, func() {
+		if err := conn.SetDeadline(time.Now()); err != nil {
+			tidy.Close(conn) // closing it ends the exchange just the same
+		}
+	})
+	defer stop()
 	client, err := smtp.NewClient(conn, c.Host)
 	if err != nil {
-		tidy.CloseWarn("smtp connection", conn)
+		tidy.Close(conn) // NewClient has usually closed it already; a second close fails quietly
 		return fmt.Errorf("smtp handshake: %w", err)
 	}
 	// A successful Quit closes the connection itself, so Close is only for the

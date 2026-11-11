@@ -12,6 +12,10 @@ option go_package = "github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 service Agent {
   rpc Ping(PingRequest) returns (PingResponse);
 
+  // Replaces the agent's certificate, and the CA certificate it trusts, with
+  // newly issued ones for the same keys, before the old ones expire.
+  rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+
   // Backup repository operations. The server sends the repository config and
   // password with every call; the agent keeps only a local Kopia cache.
   rpc InitRepository(InitRepositoryRequest) returns (InitRepositoryResponse);
@@ -217,6 +221,16 @@ message RestoreResponse {
 }
 
 message PingRequest {}
+
+message RenewCertificateRequest {
+  // The agent's new certificate (DER): same agent ID, same key.
+  bytes cert_der = 1;
+  // The server's CA certificate (DER). It may be a renewed one; the agent
+  // accepts it only when it carries the same key as the CA it already trusts.
+  bytes ca_der = 2;
+}
+
+message RenewCertificateResponse {}
 
 message PingResponse {
   string agent_id = 1;

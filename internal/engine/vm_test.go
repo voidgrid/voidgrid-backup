@@ -209,3 +209,53 @@ func TestRemoveLeftoverOverlay(t *testing.T) {
 		t.Errorf("an overlay that cannot be removed must warn, got %q", w)
 	}
 }
+
+// A backup that was cut short leaves the domain on its overlay. The next one
+// merges it back first and saves the disk, not the overlay.
+func TestVMBackupMergesALeftoverOverlayFirst(t *testing.T) {
+	ctx := context.Background()
+	e, r, hv, disk := newVMFixture(t, virt.StateRunning)
+	overlay := disk + ".vb-1700000000"
+	writeFile(t, overlay, "QFI\xfb small overlay")
+	hv.Dom.Disks[0].Source, hv.Dom.Disks[0].Backing = overlay, true
+	hv.Base = map[string]string{"vda": disk}
+
+	res, err := e.BackupVM(ctx, r, hv, VMSpec{Name: "ha"}, keepOne)
+	if err != nil || res.Err != nil {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if strings.Join(hv.Calls, ",") != "commit vda,snapshot,commit vda" {
+		t.Fatalf("calls: %v", hv.Calls)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "merged back") {
+		t.Fatalf("warnings: %v", res.Warnings)
+	}
+	if _, err := os.Stat(overlay); err == nil {
+		t.Fatal("the leftover overlay is still there")
+	}
+	out := filepath.Join(t.TempDir(), "out")
+	m := vmManifest(t, e, r, res.SnapshotID, out)
+	if m.Disks["vda"] != disk {
+		t.Fatalf("manifest disk: %+v", m)
+	}
+	if got := readFile(t, filepath.Join(out, "disks", "vda.qcow2")); got != "QFI\xfb disk contents" {
+		t.Fatalf("saved disk: %q", got)
+	}
+}
+
+// When the overlay cannot be merged back, nothing is backed up: a snapshot of
+// the overlay alone would look like a backup and restore nothing.
+func TestVMBackupRefusesALeftoverOverlayItCannotMerge(t *testing.T) {
+	ctx := context.Background()
+	for _, state := range []string{virt.StateRunning, virt.StateShutoff} {
+		e, r, hv, disk := newVMFixture(t, state)
+		overlay := disk + ".vb-1700000000"
+		writeFile(t, overlay, "QFI\xfb small overlay")
+		hv.Dom.Disks[0].Source, hv.Dom.Disks[0].Backing = overlay, true
+		hv.CommitErr = errors.New("block job failed")
+		res, err := e.BackupVM(ctx, r, hv, VMSpec{Name: "ha"}, keepOne)
+		if err != nil || res.Err == nil || res.SnapshotID != "" || !strings.Contains(res.Err.Error(), "ACTION NEEDED") {
+			t.Fatalf("%s: %+v %v", state, res, err)
+		}
+	}
+}

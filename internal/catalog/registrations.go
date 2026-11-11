@@ -171,6 +171,12 @@ func (c *Catalog) RenameAgent(ctx context.Context, id, name string) error {
 	return c.update(ctx, `UPDATE agents SET name = ? WHERE id = ?`, name, id)
 }
 
+// SetAgentCertFingerprint records the certificate an agent now presents, after
+// the server renewed it.
+func (c *Catalog) SetAgentCertFingerprint(ctx context.Context, id, fingerprint string) error {
+	return c.update(ctx, `UPDATE agents SET cert_fingerprint = ? WHERE id = ?`, fingerprint, id)
+}
+
 // ReplaceAgent points an existing agent at a freshly approved registration:
 // new address and certificate, same ID, jobs and snapshots.
 func (c *Catalog) ReplaceAgent(ctx context.Context, id, address, hostname, version, fingerprint string) error {

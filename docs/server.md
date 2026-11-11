@@ -111,6 +111,16 @@ It reads the same `VB_LISTEN` and probes `/healthz` on loopback.
   flood the log.
 - Agent traffic is mutual TLS with the server's own CA. An approved agent
   accepts only the server's client certificate.
+- Certificates renew themselves. An agent's certificate is valid for 10
+  years; within a year of its end the server issues a new one for the same key
+  the next time it reaches the agent, and the agent switches to it without a
+  restart. The CA certificate (20 years) is renewed with the same key at a
+  server start within two years of its end, and agents receive it with their
+  next certificate. The server's own client certificate is renewed at a start
+  within a year of its end. The registration certificate is renewed at a start
+  within 30 days of its end, which changes the registration token: only agents
+  that have not registered yet need the new one. An agent older than this
+  feature keeps its certificate and the server's log says to update it.
 - Cookies (the session and the sign-in state) are always `HttpOnly` and
   `SameSite=Lax`, and `Secure` whenever the request arrived over HTTPS, either
   directly or through your reverse proxy. Behind a proxy that ends TLS, the
@@ -392,7 +402,10 @@ histories and retention never touch each other.
   repository is refused when another repository already uses the same place
   (the same SFTP host, port, user and path, the same S3 endpoint, bucket and
   prefix, or the same directory). Two repositories in one place would write over
-  each other's blobs. Reconnecting to existing data after a catalog loss still
+  each other's blobs. An S3 prefix is a plain string, not a directory, so one
+  that starts the same way as another repository's in the same bucket (`nas`
+  and `nas2`) is refused too: each would list the other's objects as its own.
+  End a prefix with `/` to keep it apart (`nas/` and `nas2/`). Reconnecting to existing data after a catalog loss still
   works, since the catalog no longer lists the old repository.
 - **SFTP connection limit.** A Hetzner Storage Box allows up to 10 simultaneous
   connections per account
@@ -704,6 +717,13 @@ never half-completes over existing data.
 
 Stack and VM snapshots also offer a whole-stack / whole-VM restore and, for
 stacks, "import dump". In-place restores ask you to type the stack or VM name.
+
+An import loads the dump with the database's own client (`psql`, `mariadb`).
+`psql` carries on after a statement fails, so the run shows what it reported:
+the first failed statements, and how many more there were. An import with any
+failed statement ends as partial, not as a success. Loading a full PostgreSQL
+dump into a server that already has the `postgres` role reports that one role
+as existing, which is expected; anything else is worth reading.
 
 #### Restoring on a different agent
 

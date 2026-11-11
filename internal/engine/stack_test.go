@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path/filepath"
 	"slices"
@@ -204,5 +205,86 @@ func TestStackStoppedDBIsSkipped(t *testing.T) {
 	res, err := f.e.BackupStack(ctx, f.r, f.dk, f.spec(), keepOne)
 	if err != nil || res.Err != nil || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "not running") {
 		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// psql exits 0 after failed statements and reports them only on stderr: they
+// are part of what an import returns, the first ones in full.
+func TestImportDumpReportsFailedStatements(t *testing.T) {
+	f := newStackFixture(t)
+	ctx := context.Background()
+	res, err := f.e.BackupStack(ctx, f.r, f.dk, f.spec(), Retention{Latest: 3})
+	if err != nil || res.Err != nil {
+		t.Fatalf("backup: %+v %v", res, err)
+	}
+	f.fake.Exec = func(_ string, _ []string, stdin io.Reader, stdout, stderr io.Writer) int {
+		_, _ = io.Copy(io.Discard, stdin)
+		dockertest.Say(stdout, "CREATE TABLE\n")
+		for i := range 12 {
+			dockertest.Say(stderr, fmt.Sprintf("ERROR:  relation \"t%d\" does not exist\nLINE 1: INSERT INTO t%d VALUES (1);\n", i, i))
+		}
+		return 0
+	}
+	out, err := f.e.ImportDump(ctx, f.r, f.dk, res.SnapshotID, "db")
+	if err != nil {
+		t.Fatalf("import: %q %v", out, err)
+	}
+	failed := ImportErrors(out)
+	if len(failed) != importErrorsKept || !strings.Contains(failed[0], `relation "t0" does not exist`) {
+		t.Fatalf("failed statements in the output: %q", failed)
+	}
+	if !strings.Contains(out, "and 2 more failed statements") || !strings.Contains(out, "CREATE TABLE") {
+		t.Fatalf("output: %q", out)
+	}
+}
+
+// Two mount paths that flatten to the same name are both backed up, and each
+// goes back to its own path.
+func TestStackMountsWithTheSameFlatName(t *testing.T) {
+	f := newStackFixture(t)
+	ctx := context.Background()
+	base := t.TempDir()
+	one, two := filepath.Join(base, "a", "b__c"), filepath.Join(base, "a__b", "c")
+	writeFile(t, filepath.Join(one, "one.txt"), "1")
+	writeFile(t, filepath.Join(two, "two.txt"), "2")
+	spec := f.spec()
+	spec.Include = []string{one, two, one}
+	res, err := f.e.BackupStack(ctx, f.r, f.dk, spec, Retention{Latest: 1})
+	if err != nil || res.Err != nil {
+		t.Fatalf("backup: %+v %v", res, err)
+	}
+	mounts, err := f.e.ListDirectory(ctx, f.r, res.SnapshotID, mountsDirName)
+	if err != nil || len(mounts) != 2 {
+		t.Fatalf("mounts in the snapshot: %v %v", names(mounts), err)
+	}
+	writeFile(t, filepath.Join(one, "one.txt"), "changed")
+	writeFile(t, filepath.Join(two, "two.txt"), "changed")
+	if _, err := f.e.RestoreStack(ctx, f.r, f.dk, res.SnapshotID, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if a, b := readFile(t, filepath.Join(one, "one.txt")), readFile(t, filepath.Join(two, "two.txt")); a != "1" || b != "2" {
+		t.Fatalf("restored %q and %q", a, b)
+	}
+}
+
+// A mount that is left out stays out when it lies inside a mount that is
+// backed up, outside the stack directory as well as inside it.
+func TestStackExcludedMountInsideAnIncludedOne(t *testing.T) {
+	f := newStackFixture(t)
+	ctx := context.Background()
+	cache := filepath.Join(f.media, "cache")
+	writeFile(t, filepath.Join(cache, "big.bin"), "junk")
+	spec := f.spec()
+	spec.Exclude = append(spec.Exclude, cache)
+	res, err := f.e.BackupStack(ctx, f.r, f.dk, spec, Retention{Latest: 1})
+	if err != nil || res.Err != nil {
+		t.Fatalf("backup: %+v %v", res, err)
+	}
+	in, err := f.e.ListDirectory(ctx, f.r, res.SnapshotID, mountsDirName+"/"+mountName(f.media))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(in); slices.Contains(got, "cache") || len(got) == 0 {
+		t.Fatalf("the included mount holds %v", got)
 	}
 }

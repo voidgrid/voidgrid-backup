@@ -17,7 +17,8 @@ import (
 // checkLocationFree refuses a repository location that another repository
 // already uses: the same SFTP host, port, user and path, the same S3 bucket and
 // prefix, or the same directory. Two repositories in one place would write over
-// each other's blobs. except is the repository being edited, if any.
+// each other's blobs. It also refuses an S3 prefix that lists another
+// repository's objects (see repocfg.Config.SharesS3Listing). except is the repository being edited, if any.
 func (c *Controller) checkLocationFree(ctx context.Context, cfg repocfg.Config, except string) error {
 	id := cfg.Identity()
 	if id == "" {
@@ -28,8 +29,15 @@ func (c *Controller) checkLocationFree(ctx context.Context, cfg repocfg.Config, 
 		return err
 	}
 	for _, r := range repos {
-		if r.ID != except && r.Config.Identity() == id {
+		if r.ID == except {
+			continue
+		}
+		if r.Config.Identity() == id {
 			return fmt.Errorf("the repository %q already uses %s; every repository needs its own path", r.Name, cfg.Location())
+		}
+		if cfg.SharesS3Listing(r.Config) {
+			return fmt.Errorf("the S3 prefix %q starts the same way as the prefix %q of the repository %q in the same bucket, so each would list the other's objects as its own; end the prefix with a / or pick one that does not begin like the other",
+				cfg.S3.Prefix, r.Config.S3.Prefix, r.Name)
 		}
 	}
 	return nil

@@ -1,0 +1,22 @@
+name: test
+# go vet and the tests on every push to main and every pull request, the same
+# way they run locally (scripts/go.sh). The release build runs them again
+# inside the image build, so a tag can only ship what passes; this is so a
+# failure shows up when it is made and not when a version tag is pushed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Vet
+        run: scripts/go.sh vet ./...
+      - name: Test
+        run: scripts/go.sh test ./...

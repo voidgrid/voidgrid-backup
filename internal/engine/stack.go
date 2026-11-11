@@ -128,11 +128,13 @@ func (e *Engine) backupStack(ctx context.Context, rep repo.Repository, dk *docke
 	if rel, ok := relInside(e.dir, workdir); ok {
 		rules = append(rules, "/"+stackDirName+"/"+rel+"/") // never our own Kopia cache
 	}
+	var excluded []string
 	for _, p := range spec.Exclude {
 		p, err := guard.SourcePath(p)
 		if err != nil {
 			return fail(err)
 		}
+		excluded = append(excluded, p)
 		if rel, ok := relInside(p, workdir); ok {
 			rules = append(rules, "/"+stackDirName+"/"+rel+dirSuffix(p))
 		}
@@ -147,7 +149,15 @@ func (e *Engine) backupStack(ctx context.Context, rep repo.Repository, dk *docke
 		if guard.Within(p, workdir) {
 			continue // already inside stack/
 		}
+		// Two paths can flatten to one name ("/a/b__c" and "/a__b/c"); the
+		// second gets a suffix, and the manifest says which path each name is.
 		name := mountName(p)
+		for n := 2; man.Mounts[name] != "" && man.Mounts[name] != p; n++ {
+			name = fmt.Sprintf("%s~%d", mountName(p), n)
+		}
+		if man.Mounts[name] == p {
+			continue // listed twice
+		}
 		ent, err := localfs.NewEntry(p)
 		if err != nil {
 			return fail(fmt.Errorf("mount %s: %w", p, err))
@@ -163,6 +173,12 @@ func (e *Engine) backupStack(ctx context.Context, rep repo.Repository, dk *docke
 		man.Mounts[name] = p
 		if rel, ok := relInside(e.dir, p); ok {
 			rules = append(rules, "/"+mountsDirName+"/"+name+"/"+rel+"/")
+		}
+		// A mount left out that lies inside this one stays out of it too.
+		for _, x := range excluded {
+			if rel, ok := relInside(x, p); ok {
+				rules = append(rules, "/"+mountsDirName+"/"+name+"/"+rel+dirSuffix(x))
+			}
 		}
 	}
 	if len(mountEntries) > 0 {
@@ -408,14 +424,85 @@ func (e *Engine) ImportDump(ctx context.Context, r Repo, dk *docker.Client, snap
 		return "", err
 	}
 	defer tidy.Close(in)
-	rc, err := dk.Exec(ctx, svc.ContainerID, cmd, nil, in)
+	// psql carries on after a statement fails and still exits 0, saying so only
+	// on stderr, so stderr is part of the result and not just of a failure.
+	var said importStderr
+	rc, err := dk.ExecStderr(ctx, svc.ContainerID, cmd, nil, in, &said)
 	if err != nil {
 		return "", err
 	}
 	defer tidy.Close(rc)
 	var out tail
 	_, err = io.Copy(&out, rc)
-	return out.String(), err
+	return strings.TrimSpace(said.report() + "\n" + out.String()), err
+}
+
+// importErrorLine matches a line in which a database client reports a failed
+// statement ("ERROR:  relation ... does not exist", "psql:<stdin>:3: ERROR: ...").
+var importErrorLine = regexp.MustCompile(`\b(ERROR|FATAL):`)
+
+// ImportErrors returns the lines of an import's output that report a failed
+// statement. An import with any did not load everything in the dump.
+func ImportErrors(output string) []string {
+	var out []string
+	for _, line := range strings.Split(output, "\n") {
+		if importErrorLine.MatchString(line) {
+			out = append(out, strings.TrimSpace(line))
+		}
+	}
+	return out
+}
+
+// importStderr collects what an import writes to stderr: the first failed
+// statements in full, a count of the rest, and the tail of everything else. A
+// dump can fail on thousands of statements, and the first failures are the ones
+// that explain the rest.
+type importStderr struct {
+	partial []byte   // an unfinished line
+	errors  []string // the first importErrorsKept failed statements
+	failed  int
+	rest    tail // other lines (notices, context), the last of them
+}
+
+const importErrorsKept = 10
+
+func (s *importStderr) Write(p []byte) (int, error) {
+	s.partial = append(s.partial, p...)
+	for {
+		i := bytes.IndexByte(s.partial, '\n')
+		if i < 0 {
+			return len(p), nil
+		}
+		s.line(string(s.partial[:i]))
+		s.partial = s.partial[i+1:]
+	}
+}
+
+func (s *importStderr) line(l string) {
+	if !importErrorLine.MatchString(l) {
+		_, _ = s.rest.Write([]byte(l + "\n")) // a tail never fails to write
+		return
+	}
+	if s.failed++; s.failed <= importErrorsKept {
+		s.errors = append(s.errors, strings.TrimSpace(l))
+	}
+}
+
+// report is what the import said on stderr, failed statements first.
+func (s *importStderr) report() string {
+	if len(s.partial) > 0 {
+		s.line(string(s.partial))
+		s.partial = nil
+	}
+	var b strings.Builder
+	b.WriteString(strings.Join(s.errors, "\n"))
+	if more := s.failed - len(s.errors); more > 0 {
+		fmt.Fprintf(&b, "\n... and %d more failed statements", more)
+	}
+	if r := s.rest.String(); r != "" {
+		b.WriteString("\n" + r)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func readStackManifest(ctx context.Context, root kfs.Entry) (StackManifest, error) {

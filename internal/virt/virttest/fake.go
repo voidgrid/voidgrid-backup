@@ -21,7 +21,10 @@ type Fake struct {
 	Calls       []string
 	Overlays    []string
 	OnOverlay   bool // disks are currently on overlays
-	Defined     string
+	// Base maps a disk target to the image under the overlay it runs on, for a
+	// domain set up as an interrupted backup left it; a commit puts it back.
+	Base    map[string]string
+	Defined string
 }
 
 func (f *Fake) Domains(ctx context.Context) ([]virt.Domain, error) {
@@ -81,6 +84,14 @@ func (f *Fake) BlockCommit(_ context.Context, _, disk string) error {
 		}
 	}
 	f.OnOverlay = false
+	// A disk that was on an overlay is back on the image under it.
+	if f.Dom != nil {
+		for i, d := range f.Dom.Disks {
+			if d.Target == disk && d.Backing && f.Base[disk] != "" {
+				f.Dom.Disks[i].Source, f.Dom.Disks[i].Backing = f.Base[disk], false
+			}
+		}
+	}
 	return nil
 }
 

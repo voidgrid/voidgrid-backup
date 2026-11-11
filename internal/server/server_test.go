@@ -307,3 +307,66 @@ func TestHTTP(t *testing.T) {
 // restoreOK accepts a successful restore. Not being allowed to give files to
 // other users (the tests do not run as root) does not make a restore partial.
 func restoreOK(r catalog.Run) bool { return r.Status == catalog.RunSuccess }
+
+// A certificate that is due is renewed when the server next reaches the agent:
+// the agent switches to the new one, the server records it, the old one is no
+// longer what the agent presents, and a restart keeps it.
+func TestAgentCertificateIsRenewed(t *testing.T) {
+	ctx := context.Background()
+	agentDir := t.TempDir()
+	a, addr := startAgent(t, agentDir)
+	c := newController(t)
+	enrolled, err := enrollTestAgent(t, c, a, "box", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Check(ctx, enrolled); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.Catalog.Agent(ctx, enrolled.ID); got.CertFingerprint != enrolled.CertFingerprint {
+		t.Fatal("a certificate that is not due was renewed")
+	}
+
+	// Make the ten-year certificate count as due.
+	old := agentRenewBefore
+	agentRenewBefore = 11 * 365 * 24 * time.Hour
+	if err := c.Check(ctx, enrolled); err != nil { // sends the new certificate
+		t.Fatal(err)
+	}
+	agentRenewBefore = old
+	if next, _ := c.Catalog.GetSetting(ctx, agentNextCertKey(enrolled.ID)); next == "" {
+		t.Fatal("no renewal was started")
+	}
+	if err := c.Check(ctx, enrolled); err != nil { // sees the agent using it
+		t.Fatalf("Check after renewal: %v", err)
+	}
+	renewed, err := c.Catalog.Agent(ctx, enrolled.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renewed.CertFingerprint == enrolled.CertFingerprint {
+		t.Fatal("the renewed certificate was not recorded")
+	}
+	if next, _ := c.Catalog.GetSetting(ctx, agentNextCertKey(enrolled.ID)); next != "" {
+		t.Fatal("the renewal is still pending after the agent used the new certificate")
+	}
+	if err := c.Check(ctx, renewed); err != nil {
+		t.Fatalf("Check with the renewed record: %v", err)
+	}
+
+	// A restart loads the renewed certificate from disk.
+	a2, addr2 := startAgent(t, agentDir)
+	if a2.ID() != enrolled.ID {
+		t.Fatalf("restarted agent: id %q", a2.ID())
+	}
+	renewed.Address = addr2
+	if err := c.Check(ctx, renewed); err != nil {
+		t.Fatalf("Check after restart: %v", err)
+	}
+	// A record of the old certificate alone no longer matches the agent.
+	stale := renewed
+	stale.CertFingerprint = enrolled.CertFingerprint
+	if err := c.Check(ctx, stale); err == nil {
+		t.Fatal("the agent was accepted against its old certificate's record")
+	}
+}

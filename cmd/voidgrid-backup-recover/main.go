@@ -30,6 +30,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -42,27 +43,54 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
+	sub, args, err := splitCommand(os.Args[1:])
+	if errors.Is(err, flag.ErrHelp) {
+		usage()
+		return
+	}
+	if err != nil {
 		usage()
 		os.Exit(2)
 	}
-	var err error
-	switch os.Args[1] {
+	switch sub {
 	case "list":
-		err = runList(os.Args[2:])
+		err = runList(args)
 	case "restore":
-		err = runRestore(os.Args[2:])
-	case "-h", "-help", "--help":
-		usage()
-		return
-	default:
-		usage()
-		os.Exit(2)
+		err = runRestore(args)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+}
+
+// splitCommand finds the subcommand and returns it with every other argument,
+// in order. The connection flags may come before the subcommand, as the docs
+// and the usage text write them, or after it, or some on each side:
+//
+//	voidgrid-backup-recover -password-file pw -kind s3 ... list
+//	voidgrid-backup-recover restore -password-file pw -kind s3 ... -snapshot <id>
+//
+// The flags before it are read with the same definitions the subcommands use,
+// so a flag's value is never mistaken for the subcommand.
+func splitCommand(argv []string) (sub string, args []string, err error) {
+	lead := flag.NewFlagSet("voidgrid-backup-recover", flag.ContinueOnError)
+	lead.SetOutput(io.Discard)
+	lead.Usage = func() {}
+	var c repoFlags
+	addRepoFlags(lead, &c)
+	if err := lead.Parse(argv); err != nil {
+		return "", nil, err
+	}
+	rest := lead.Args()
+	if len(rest) == 0 {
+		return "", nil, errors.New("no subcommand")
+	}
+	if rest[0] != "list" && rest[0] != "restore" {
+		return "", nil, fmt.Errorf("unknown subcommand %q", rest[0])
+	}
+	before := argv[:len(argv)-len(rest)]
+	return rest[0], append(append([]string(nil), before...), rest[1:]...), nil
 }
 
 func usage() {
@@ -230,6 +258,18 @@ func openRepo(c repoFlags) (*engine.Engine, engine.Repo, func(), error) {
 		return nil, engine.Repo{}, noop, err
 	}
 	e.Recovery()
+	// Without a saved known_hosts the host key seen now is trusted, and said, so
+	// it can be compared with the provider's published one. Kopia itself would
+	// look for ~/.ssh/known_hosts and stop: a recovering machine has none.
+	if s := cfg.SFTP; s != nil && s.KnownHosts == "" {
+		kh, err := engine.FetchHostKey(context.Background(), s.Host, s.Port)
+		if err != nil {
+			cleanup()
+			return nil, engine.Repo{}, noop, err
+		}
+		s.KnownHosts = kh
+		fmt.Fprintf(os.Stderr, "no known_hosts given: trusting the host key the server presented:\n%s", kh)
+	}
 	return e, engine.Repo{ID: "recovery", Config: cfg, Password: password}, cleanup, nil
 }
 

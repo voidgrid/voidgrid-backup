@@ -1,0 +1,6 @@
+.cache/
+/.dev/
+reference/
+# Credentials for the live tests and the examples, and the examples' data.
+.env
+/examples/*/data/

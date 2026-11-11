@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"github.com/kopia/kopia/repo/blob"
 	"os"
 	"path/filepath"
 	"strings"
@@ -222,5 +223,40 @@ func TestListAndDeleteSnapshotsOfAnotherHost(t *testing.T) {
 	}
 	if left, _ := e.ListSnapshots(ctx, r, []string{src}); len(left) != 0 {
 		t.Fatalf("the snapshot is still there: %d", len(left))
+	}
+}
+
+// A wipe deletes only what Kopia names. An S3 prefix is a plain string, so the
+// listing of "nas-backup" also returns the blobs of a repository at
+// "nas-backup2" (as "2kopia.repository", "2p1f..." and so on) and anything else
+// that starts the same way.
+func TestKopiaBlob(t *testing.T) {
+	own := []string{
+		"kopia.repository", "kopia.blobcfg", "kopia.maintenance", "kopia.repository.backup.20261111",
+		"p07bb0fc71cc2116424c93f925b249754-s535cd9ab2756651e147",
+		"q07bb0fc71cc2116424c93f925b249754-s535cd9ab2756651e147",
+		"s535cd9ab2756651e147", "n976a12af3dd6ad11635d30c5c723e461",
+		"xn0_976a12af3dd6ad11635d30c5c723e461-s535cd9ab2756651e147-c1",
+		"xs12_976a12af3dd6ad11635d30c5c723e461-s535cd9ab2756651e147-c1",
+		"xr0_7_976a12af3dd6ad11635d30c5c723e461-s535cd9ab2756651e147-c1",
+		"xe3", "xw1794403817",
+		"_log_20261111133016_f2dd_1794403816_1794403816_1_90208d2a68ad12ce34fbd5271bcd6086",
+	}
+	for _, id := range own {
+		if !kopiaBlob(blob.ID(id)) {
+			t.Errorf("%q is a Kopia blob and would be left behind", id)
+		}
+	}
+	var foreign []string
+	for _, ext := range []string{"2", "-old", "prod", "x", "s", "q", "_log_", "a1"} { // a sibling's prefix goes on from ours
+		for _, id := range own {
+			foreign = append(foreign, ext+id)
+		}
+	}
+	foreign = append(foreign, "-notes.txt", "photos.zip", "docs/", "p", "notes", "kopia.repository.backup.", "")
+	for _, id := range foreign {
+		if kopiaBlob(blob.ID(id)) {
+			t.Errorf("%q is not this repository's and would be deleted", id)
+		}
 	}
 }

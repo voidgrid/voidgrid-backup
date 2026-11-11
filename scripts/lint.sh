@@ -24,4 +24,4 @@ exec docker run --rm \
   -v "$PWD/.cache/golangci:/tmp/golangci" \
   -e GOPATH=/gopath -e GOCACHE=/tmp/gobuild -e GOLANGCI_LINT_CACHE=/tmp/golangci \
   -e GOFLAGS=-buildvcs=false -e HOME=/tmp \
-  golangci/golangci-lint:v2.14.0 golangci-lint "$@"
+  golangci/golangci-lint:v2.15.0 golangci-lint "$@"
