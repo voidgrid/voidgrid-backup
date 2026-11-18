@@ -18,6 +18,15 @@ Set `VB_SERVER` (the server's host and agent registration port) and
 in `.env` first. The agent then appears on the server's **Agents** page under
 "Waiting for approval"; approve it there and pick its name.
 
+When you approve it, check the **address** the server will use to reach the
+agent. It is pre-filled from where the registration came from, which for
+containers on one Docker network is the agent's container IP, and that changes
+when the stack is recreated or rebooted. Replace it with the agent's Docker
+service name (for example `agent:9443`, same Docker network, not the default
+`bridge`) or with the host's DNS name or fixed IP and the published port (`VB_PORT`,
+default 9443). It can be changed later with **Change address** on the server's
+Agents page; see [server.md](server.md#network-and-security).
+
 ## Configuration
 
 Every setting is a flag and an environment variable; a flag given on the
@@ -366,6 +375,7 @@ A **shut-off** VM is copied directly.
 | The agent exits at start about `VB_SERVER`/`VB_TOKEN` | It is not approved yet and one of them is missing or malformed |
 | "does not match the token" in the log | `VB_SERVER` points at a different server than the token came from |
 | The agent never shows up under "Waiting for approval" | `VB_SERVER` and the registration port are reachable from this host, and the token is current (it changes when rotated) |
+| The server shows this agent as "unreachable" after a restart | The server's stored address for it is probably a container IP that changed. Check with `docker exec <server-container> voidgrid-backup-server check <address>`, then set a Docker service name or the host's name or IP on the server's Agents page (**Change address**) |
 | Stacks page: "no Docker socket configured" | The socket volume and `VB_DOCKER_SOCKET` |
 | VMs page: "no libvirt socket configured" | The socket volume and `VB_LIBVIRT_SOCKET` |
 | "is mounted read-only in the agent" on restore | Intended: restore to a directory, or mount that path read-write |

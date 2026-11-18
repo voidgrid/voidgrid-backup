@@ -114,7 +114,10 @@ address accepted a connection, 1 when none did.
   reverse proxy. Its certificate is self-signed; the registration token pins it.
   A valid token only creates a pending entry that you approve or reject.
 - After approval the server connects **to** the agent (default port 9443), so
-  the server must be able to reach each agent's address. It accepts only the
+  the server must be able to reach each agent's address, which must be a name
+  or IP that stays the same: a Docker service name on a shared network, or the
+  host's name or IP with the published port, never a container IP (see
+  **Agents** under Using the UI). It accepts only the
   exact certificate issued at approval, so after an agent is replaced the old
   host's certificate stops working.
 - Wrong-token attempts on the registration port are logged once per source
@@ -276,6 +279,27 @@ the port it reported); the address is editable. Choosing an existing agent
 under **Replaces** makes the new registration take over that agent's ID, jobs
 and snapshots, which is how a wiped or redeployed host comes back. Reject
 refuses an agent; Forget removes a rejected entry so it can register again.
+
+**Check the address before you approve.** The server connects **to** the agent
+on the address you approve, and the form pre-fills it from where the
+registration came from. When the server and the agent are in containers on the
+same Docker network that is the agent container's IP, which changes whenever
+the stack is recreated or rebooted, and the server then can't reach the agent.
+Use an address that doesn't change:
+
+- **Same Docker network** (a compose network or a named user-defined network
+  that both containers are on): the agent's Docker service or container name,
+  for example `agent:9443`. Docker's DNS resolves it to the current IP each
+  time. This does not work on the default `bridge` network, which has no name
+  resolution.
+- **Different hosts, or different networks**: the agent host's DNS name or a
+  fixed IP, with the port the agent publishes (`VB_PORT`, default 9443), for
+  example `backup-host.example:9443`.
+
+Never use a container IP such as `172.18.0.5`. An approved agent's address can
+be corrected later with **Change address** (see below); use `check` to test it
+first (see [Health check](#health-check)).
+
 Agents can be renamed at any time: the name is only a label.
 The address of an approved agent can be changed at any time on the same page
 (**Change address**), without re-registering it: the agent keeps its ID,
@@ -963,7 +987,7 @@ know newer RPCs, which shows up as an error on the run.
 
 | Symptom | Look at |
 |---|---|
-| Agent "unreachable" | The error under it on the Agents page; can the server reach `host:port`? Was the agent's data directory lost (then register it again, approving it as replacing this one)? |
+| Agent "unreachable" | The error under it on the Agents page; can the server reach `host:port`? Run `docker exec <server-container> voidgrid-backup-server check <host:port>`. If the stored address is a container IP, it went stale when the stack restarted: use **Change address** to set a Docker service name (same Docker network) or the host's name or IP with the published port. Was the agent's data directory lost (then register it again, approving it as replacing this one)? |
 | An agent never appears under "Waiting for approval" | Its `VB_SERVER` reaches the registration port, and its `VB_TOKEN` is the current one (rotating changes it) |
 | Schedules run at the wrong hour | `TZ` in the server's `.env` |
 | A run is "partial" | The run's detail lines say exactly what and where |
