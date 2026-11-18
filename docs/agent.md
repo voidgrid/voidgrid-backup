@@ -206,6 +206,18 @@ The compose health check runs the binary's own probe (the image has no curl):
 voidgrid-backup-agent healthcheck   # exit 0 healthy, 1 unhealthy
 ```
 
+The image has no ping, dig or nc. To test whether this container can reach an
+address, for example the server's registration port, run the binary's own check
+from the host (it resolves the name, then opens a TCP connection to each
+address):
+
+```sh
+docker exec <agent-container> voidgrid-backup-agent check server:9442
+```
+
+It prints the DNS result and each connection attempt, and exits 0 when an
+address accepted a connection, 1 when none did.
+
 ## Registration
 
 On first start the agent creates a key and a self-signed certificate. It then

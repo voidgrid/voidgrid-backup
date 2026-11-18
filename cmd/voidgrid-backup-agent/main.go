@@ -1,5 +1,6 @@
 // Command voidgrid-backup-agent runs on each host and serves the agent gRPC
 // API to the server. `voidgrid-backup-agent healthcheck` probes a running agent.
+// `voidgrid-backup-agent check host:port` tests DNS and TCP to an address.
 package main
 
 import (
@@ -25,6 +26,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/envflag"
 	"github.com/voidgrid/voidgrid-backup/internal/health"
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
+	"github.com/voidgrid/voidgrid-backup/internal/netcheck"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/version"
@@ -55,6 +57,9 @@ func main() {
 	cacheContentMB := envflag.Int("cache-content-mb", "VB_CACHE_CONTENT_MB", 64, "size limit in MiB, per repository, of the cache of file data read back for restores and checks; 0 turns the whole cache off")
 
 	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "check" {
+		netcheck.Main(args[1:])
+	}
 	healthcheck := len(args) > 0 && args[0] == "healthcheck"
 	if healthcheck {
 		args = args[1:]

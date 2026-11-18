@@ -96,6 +96,17 @@ voidgrid-backup-server healthcheck   # exit 0 healthy, 1 unhealthy
 
 It reads the same `VB_LISTEN` and probes `/healthz` on loopback.
 
+The image has no ping, dig or nc either. To test whether this container can
+reach an address, for example an agent, run the binary's own check from the
+host (it resolves the name, then opens a TCP connection to each address):
+
+```sh
+docker exec <server-container> voidgrid-backup-server check agent:9443
+```
+
+It prints the DNS result and each connection attempt, and exits 0 when an
+address accepted a connection, 1 when none did.
+
 ## Network and security
 
 - Agents register with the server on its own TLS listener (`VB_AGENT_LISTEN`,

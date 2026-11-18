@@ -1,5 +1,6 @@
 // Command voidgrid-backup-server runs the web UI, API, scheduler and agent
 // controller. `voidgrid-backup-server healthcheck` probes a running server.
+// `voidgrid-backup-server check host:port` tests DNS and TCP to an address.
 package main
 
 import (
@@ -25,6 +26,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/envflag"
 	"github.com/voidgrid/voidgrid-backup/internal/health"
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
+	"github.com/voidgrid/voidgrid-backup/internal/netcheck"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/server"
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
@@ -48,6 +50,9 @@ func main() {
 	oidcAllowedEmails := envflag.String("oidc-allowed-emails", "VB_OIDC_ALLOWED_EMAILS", "", "comma-separated allowed identities; empty allows any the provider authenticates")
 
 	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "check" {
+		netcheck.Main(args[1:])
+	}
 	healthcheck := len(args) > 0 && args[0] == "healthcheck"
 	printToken := len(args) > 0 && args[0] == "token"
 	if healthcheck || printToken {
