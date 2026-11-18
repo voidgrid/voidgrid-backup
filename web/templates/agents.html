@@ -44,13 +44,17 @@
   {{if .Agents}}<div id="live" data-ids="agents-table" data-every="15000" hidden></div>{{end}}
 
   {{if .Agents}}
-  <h2>Rename or delete an agent</h2>
-  <p class="hint">The name is only a label. The agent keeps its ID, so its snapshots and jobs are unaffected.</p>
+  <h2>Rename, change the address of, or delete an agent</h2>
+  <p class="hint">The name is only a label. The agent keeps its ID, so its snapshots and jobs are unaffected. The address is what the server connects to (<span class="mono">host:port</span>). A container IP changes when a stack restarts: if the server and the agent are on the same Docker network, use the agent&rsquo;s Docker service name (for example <span class="mono">agent:9443</span>); otherwise use the host&rsquo;s DNS name or fixed IP and the published port.</p>
   <div class="card">
     {{range .Agents}}
     <form class="grid" method="post" action="/agents/{{.ID}}/rename">
       <label>Name <input name="name" value="{{.Name}}" required></label>
       <div class="actions"><button type="submit">Rename</button></div>
+    </form>
+    <form class="grid" method="post" action="/agents/{{.ID}}/address">
+      <label>Address <input name="address" class="mono" value="{{.Address}}" required></label>
+      <div class="actions"><button type="submit">Change address</button></div>
     </form>
     <details class="repo-more">
       <summary class="muted">Delete {{.Name}}…</summary>

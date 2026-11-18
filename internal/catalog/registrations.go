@@ -171,6 +171,12 @@ func (c *Catalog) RenameAgent(ctx context.Context, id, name string) error {
 	return c.update(ctx, `UPDATE agents SET name = ? WHERE id = ?`, name, id)
 }
 
+// SetAgentAddress changes the host:port the server dials for an agent. The
+// agent's ID and certificate are untouched.
+func (c *Catalog) SetAgentAddress(ctx context.Context, id, address string) error {
+	return c.update(ctx, `UPDATE agents SET address = ? WHERE id = ?`, address, id)
+}
+
 // SetAgentCertFingerprint records the certificate an agent now presents, after
 // the server renewed it.
 func (c *Catalog) SetAgentCertFingerprint(ctx context.Context, id, fingerprint string) error {

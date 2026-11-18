@@ -266,6 +266,12 @@ under **Replaces** makes the new registration take over that agent's ID, jobs
 and snapshots, which is how a wiped or redeployed host comes back. Reject
 refuses an agent; Forget removes a rejected entry so it can register again.
 Agents can be renamed at any time: the name is only a label.
+The address of an approved agent can be changed at any time on the same page
+(**Change address**), without re-registering it: the agent keeps its ID,
+certificate, jobs and snapshots. A container IP changes whenever a stack
+restarts, so don't use one. If the server and the agent are on the same Docker
+network, use the agent's Docker service name (for example `agent:9443`);
+otherwise use the host's DNS name or a fixed IP with the published port.
 
 **Delete** an agent from the same page (type its name to confirm). It is refused
 while the agent still has jobs, and while it is the Kopia maintenance owner of a

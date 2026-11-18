@@ -79,6 +79,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /agents/registrations/{id}/forget", u.forgetRegistration)
 	mux.HandleFunc("POST /agents/token/rotate", u.rotateToken)
 	mux.HandleFunc("POST /agents/{id}/rename", u.renameAgent)
+	mux.HandleFunc("POST /agents/{id}/address", u.setAgentAddress)
 	mux.HandleFunc("GET /repositories", u.repositories)
 	mux.HandleFunc("POST /repositories", u.addRepository)
 	mux.HandleFunc("GET /repositories/{id}/edit", u.editRepositoryForm)
@@ -367,6 +368,14 @@ func (u *ui) renameAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectNotice(w, r, "/agents", "Renamed.")
+}
+
+func (u *ui) setAgentAddress(w http.ResponseWriter, r *http.Request) {
+	if err := u.c.SetAgentAddress(r.Context(), r.PathValue("id"), r.FormValue("address")); err != nil {
+		u.agentsFailed(w, r, err)
+		return
+	}
+	redirectNotice(w, r, "/agents", "Address changed.")
 }
 
 // Repositories

@@ -448,3 +448,25 @@ func TestReplacedAgentOldCertRefused(t *testing.T) {
 		t.Fatalf("new agent after replacement: %v", err)
 	}
 }
+
+func TestSetAgentAddress(t *testing.T) {
+	ctx := context.Background()
+	c := newController(t)
+	if err := c.Catalog.AddAgent(ctx, catalog.Agent{ID: "a1", Name: "one", Address: "172.18.0.5:9443", CertFingerprint: "x", EnrolledAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetAgentAddress(ctx, "a1", " agent:9443 "); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.Catalog.Agent(ctx, "a1"); got.Address != "agent:9443" || got.ID != "a1" || got.CertFingerprint != "x" {
+		t.Fatalf("after address change: %+v", got)
+	}
+	for _, bad := range []string{"", "agent"} {
+		if err := c.SetAgentAddress(ctx, "a1", bad); err == nil {
+			t.Fatalf("accepted %q", bad)
+		}
+	}
+	if err := c.SetAgentAddress(ctx, "missing", "x:1"); !errors.Is(err, catalog.ErrNotFound) {
+		t.Fatalf("missing agent: %v", err)
+	}
+}

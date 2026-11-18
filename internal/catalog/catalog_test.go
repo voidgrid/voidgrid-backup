@@ -171,6 +171,15 @@ func TestRenameAndReplaceAgent(t *testing.T) {
 	if err := c.RenameAgent(ctx, "missing", "x"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("rename missing: %v", err)
 	}
+	if err := c.SetAgentAddress(ctx, "a1", "agent:9443"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.Agent(ctx, "a1"); got.Address != "agent:9443" || got.CertFingerprint != "old" {
+		t.Fatalf("after address change: %+v", got)
+	}
+	if err := c.SetAgentAddress(ctx, "missing", "x:1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("address of a missing agent: %v", err)
+	}
 	if err := c.RecordFailure(ctx, "a1", "boom"); err != nil {
 		t.Fatal(err)
 	}

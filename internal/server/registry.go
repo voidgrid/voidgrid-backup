@@ -308,6 +308,17 @@ func (c *Controller) RenameAgent(ctx context.Context, id, name string) error {
 	return c.Catalog.RenameAgent(ctx, id, name)
 }
 
+// SetAgentAddress changes the host:port the server dials for an enrolled
+// agent, without re-registering it. The ID, certificate, jobs and snapshots
+// are untouched.
+func (c *Controller) SetAgentAddress(ctx context.Context, id, address string) error {
+	address = strings.TrimSpace(address)
+	if _, _, err := net.SplitHostPort(address); err != nil {
+		return fmt.Errorf("address must be host:port: %w", err)
+	}
+	return c.Catalog.SetAgentAddress(ctx, id, address)
+}
+
 // cleanText trims s, drops control characters and cuts it to max runes. It is
 // applied to what an agent reports about itself before it is stored and shown.
 func cleanText(s string, max int) string {
