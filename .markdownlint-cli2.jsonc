@@ -1,0 +1,16 @@
+{
+  // Rules for the repo's own markdown. Run by scripts/lint-md.sh (pre-commit hook and CI).
+  // The same file is used in every voidgrid repo; keep them identical.
+  "config": {
+    "default": true,
+    // Prose is wrapped near 110 columns. Tables and code blocks hold long lines that cannot be wrapped.
+    "MD013": { "line_length": 120, "tables": false, "code_blocks": false },
+    // Tables are written "| a | b |" with spaces around every pipe, separator row included.
+    "MD060": { "style": "compact" },
+    // A changelog repeats "Added", "Fixed" under every release; only headings under one parent must differ.
+    "MD024": { "siblings_only": true }
+  },
+  // Agent instructions, generated licence texts and local working files are not documentation.
+  "ignores": ["CLAUDE.md", "THIRD_PARTY_LICENSES.md", "NOTICE.md", "HANDOFF.md", "reference/**", "node_modules/**", ".dev/**", ".cache/**"],
+  "gitignore": true
+}

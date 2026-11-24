@@ -30,7 +30,7 @@ Every setting is a flag and an environment variable; a flag given on the
 command line wins over the environment.
 
 | Flag | Variable | Default | Meaning |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `-listen` | `VB_LISTEN` | `:8080` | HTTP address for the UI, API and `/healthz` |
 | `-agent-listen` | `VB_AGENT_LISTEN` | `:9442` | TLS address agents register on. In the example compose `VB_AGENT_PORT` sets this and the published port together. |
 | `-data` | `VB_DATA` | `/data` | Directory for `catalog.db`, `pki/` and `session.key` |
@@ -74,7 +74,7 @@ default.
 ## The data directory
 
 | Path | What it is | If you lose it |
-|---|---|---|
+| --- | --- | --- |
 | `catalog.db` | SQLite: agents, repositories (including their passwords), jobs, runs | You have to add repositories and jobs again. The backups themselves are safe in the repositories, if you still have their passwords. |
 | `pki/ca.crt`, `pki/ca.key` | The CA every agent trusts | Every agent has to register again |
 | `pki/registry.crt`, `pki/registry.key` | Certificate of the agent registration listener; the registration token pins it | Recreated, which changes the token: update `VB_TOKEN` on agents that are not approved yet |
@@ -165,6 +165,7 @@ server's own, so publishing it directly still requires signing in either
 way.
 
 When OIDC is configured:
+
 - Anyone who completes the provider's login is let in, unless an allowed-
   identities list names specific ones — worth setting once more than one
   person could reach the provider.
@@ -177,6 +178,7 @@ supported way to run this on a single-host homelab where standing up an
 OIDC provider is more infrastructure than the backup tool itself warrants.
 
 Either way:
+
 - The session is a signed cookie, valid 30 days, backed by a key generated
   on first use and stored at `<data>/session.key`. Losing it (or restoring
   a backup from before it existed) just signs everyone out; it holds no
@@ -368,7 +370,7 @@ connects to one already at that location) and becomes its maintenance owner:
 the agent that runs Kopia's compaction and garbage collection.
 
 | Kind | Fields | Notes |
-|---|---|---|
+| --- | --- | --- |
 | SFTP | host, port, user, path, key file or password, known_hosts | Hetzner Storage Box: port `23`, user `uXXXXXX`, a path relative to its home such as `backups/homelab`. The key file is a path **inside the agent** (e.g. `/keys/sftp_key`). Leave known_hosts empty to trust the key seen on first connect; it is pinned from then on. |
 | S3 | endpoint, bucket, prefix, region, access key, secret | "Plain HTTP" only for a local test server. Only tested against Backblaze B2's S3 API, on a free account: see [testing.md](testing.md). |
 | Filesystem | directory on the agent host | A local disk or a mount on that agent. |
@@ -392,7 +394,7 @@ you don't copy it to agents. What an agent needs on its own depends on the
 kind:
 
 | Kind | Needed on the other agent |
-|---|---|
+| --- | --- |
 | S3 | Nothing. The access key and secret are part of the repository. |
 | SFTP with a password | Nothing. |
 | SFTP with a key file | The key file at the **same path** as in the repository (e.g. `/keys/sftp_key`), and its public key authorized on the SFTP server. See [SFTP key naming](agent.md#sftp-key-naming). |
@@ -735,7 +737,7 @@ history as kind `check`.
 ### Runs
 
 | Status | Meaning |
-|---|---|
+| --- | --- |
 | success | Everything was backed up / restored |
 | partial | It finished, but something needs attention: unreadable files (named), a failed database dump, a crash-consistent VM copy, or **ACTION NEEDED** for a VM disk left on an overlay |
 | failed | Nothing usable was produced |
@@ -900,10 +902,10 @@ One server-wide setting, not per-job, sent to whichever of these are enabled:
 A run in progress has a **Cancel** button, on the Jobs list and the job page. It
 stops the work (an agent resumes the containers it paused and merges a VM's
 disk overlay back), and the run ends as `failed` with the reason "cancelled by
-<user>", which sends an alert like any other failure.
+`<user>`", which sends an alert like any other failure.
 
 | Channel | What it needs |
-|---|---|
+| --- | --- |
 | Discord | A webhook URL from a channel's Integrations settings. Posts directly, no third party involved. |
 | [Notifarr](https://notifiarr.com/) | An API key and the numeric Discord channel ID to deliver to, from Notifarr's Passthrough integration. Goes through Notifarr rather than posting to Discord directly, so it shows up alongside whatever else you already route through it. |
 | Email | An SMTP server: host, port, optional username/password, a from address and at least one recipient. Port 465 is implicit TLS; anything else tries STARTTLS if the server offers it. |
@@ -953,7 +955,8 @@ All three can be on at once. A secret field (webhook URL, API key, SMTP
 password) left blank when saving keeps whatever was already stored for that
 channel. To turn a channel off, uncheck "enabled" and save: its settings and
 secret are kept, so it can be switched back on later without retyping them, and
-it is not sent to or tested while off (handy to test one channel at a time). "Send test notification" fires one test message to every
+it is not sent to or tested while off (handy to test one channel at a time). "Send test notification" fires
+one test message to every
 currently-enabled channel and reports each result, without needing a real
 failure to test with.
 
@@ -971,7 +974,7 @@ Read-only, and behind the same login as the UI when one is configured (see
 `401`, not a redirect:
 
 | Endpoint | Returns |
-|---|---|
+| --- | --- |
 | `GET /api/agents` | Agents with status and warnings |
 | `GET /api/repositories` | Repositories, secrets redacted |
 | `GET /api/jobs` | Jobs and their configuration |
@@ -986,7 +989,7 @@ know newer RPCs, which shows up as an error on the run.
 ## Troubleshooting
 
 | Symptom | Look at |
-|---|---|
+| --- | --- |
 | Agent "unreachable" | The error under it on the Agents page; can the server reach `host:port`? Run `docker exec <server-container> voidgrid-backup-server check <host:port>`. If the stored address is a container IP, it went stale when the stack restarted: use **Change address** to set a Docker service name (same Docker network) or the host's name or IP with the published port. Was the agent's data directory lost (then register it again, approving it as replacing this one)? |
 | An agent never appears under "Waiting for approval" | Its `VB_SERVER` reaches the registration port, and its `VB_TOKEN` is the current one (rotating changes it) |
 | Schedules run at the wrong hour | `TZ` in the server's `.env` |

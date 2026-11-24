@@ -5,7 +5,7 @@ Copy the one you need, fill in `.env`, `docker compose up -d`. Nothing here
 is homelab-specific — placeholders throughout.
 
 | Directory | Runs | Docs |
-|---|---|---|
+| --- | --- | --- |
 | [server/](server/) | `voidgrid-backup-server`, once | [docs/server.md](../docs/server.md) |
 | [agent/](agent/) | `voidgrid-backup-agent`, on every host with something to back up | [docs/agent.md](../docs/agent.md) |
 

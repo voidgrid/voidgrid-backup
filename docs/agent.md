@@ -33,7 +33,7 @@ Every setting is a flag and an environment variable; a flag given on the
 command line wins over the environment.
 
 | Flag | Variable | Default | Meaning |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `-server` | `VB_SERVER` | | `host:port` of the server's agent registration listener. Needed until the agent is approved. |
 | `-token` | `VB_TOKEN` | | Registration token from the server. Needed until the agent is approved. |
 | `-listen` | `VB_LISTEN` | `:9443` | gRPC address the server connects to. In the example compose `VB_PORT` sets this and the published port together. |
@@ -88,7 +88,7 @@ ownership. A non-root process can do neither, so the agent runs as **root
 inside its container with only these capabilities**:
 
 | Capability | Needed for |
-|---|---|
+| --- | --- |
 | `DAC_READ_SEARCH` | Reading files and directories it doesn't own |
 | `DAC_OVERRIDE` | Writing restores into directories it doesn't own |
 | `CHOWN` | Restoring ownership |
@@ -108,7 +108,10 @@ The agent checks itself and says what's missing instead of failing quietly:
 
 - **Agents page**: a warning when it lacks any of the capabilities above.
 - **Backups**: a partial run names the first unreadable files.
-- **Restores**: when the agent cannot restore ownership, the run is still a success. Its summary says "complete, files belong to uid:gid N:N (… does not run as root, so the ownership in the backup was not restored)", and the snapshot page says so before you choose that agent. Only a file that could not be written makes a restore partial.
+- **Restores**: when the agent cannot restore ownership, the run is still a success. Its summary says
+  "complete, files belong to uid:gid N:N (… does not run as root, so the ownership in the backup was not
+  restored)", and the snapshot page says so before you choose that agent. Only a file that could not be
+  written makes a restore partial.
 
 ## Paths and read-only mounts
 
@@ -167,7 +170,7 @@ key behind it.
   host name as the comment, so a single host can be revoked by deleting its
   line:
 
-  ```
+  ```text
   ssh-ed25519 AAAA... voidgrid_<hostname>
   ```
 
@@ -237,7 +240,8 @@ under "Waiting for approval" on the Agents page; nothing is granted until you
 approve it. The agent logs its key fingerprint
 (`docker compose logs agent | grep fingerprint`); the pending entry shows the
 same value. Compare them before approving: the name shown there is whatever
-the agent says, so anyone else holding the token could pick a familiar one. On approval the server issues a certificate for the agent's own
+the agent says, so anyone else holding the token could pick a familiar one. On approval the server issues a
+certificate for the agent's own
 key, which the agent installs without a restart. From then on the agent
 requires the server's client certificate for everything, and `VB_SERVER` and
 `VB_TOKEN` are no longer used.
@@ -276,7 +280,7 @@ Docker Compose's container labels), its services, mounts, databases and
 SQLite files. A stack job takes one snapshot per project containing:
 
 | In the snapshot | What |
-|---|---|
+| --- | --- |
 | `stack/` | The compose directory: compose file, `.env`, anything inside it |
 | `mounts/` | Each ticked mount that lives outside the compose directory |
 | `dumps/<service>.sql` / `.rdb` | A dump of each database you picked |
@@ -289,14 +293,17 @@ SQLite files. A stack job takes one snapshot per project containing:
 - Host files like `/etc/localtime` and sockets are unticked, so an in-place
   restore can't overwrite the host's own files.
 - Redis/Valkey defaults to no dump (usually a cache).
-- "Pause" is suggested when SQLite or DuckDB files are found. Both are recognised by their file header (any of `.db`, `.sqlite`, `.sqlite3`, `.duckdb`, `.ddb`, a few levels deep in a mount) and listed on the stacks page. They are copied as plain files: pausing makes the copy crash-consistent, not a dump, so test a restore.
+- "Pause" is suggested when SQLite or DuckDB files are found. Both are recognised by their file header (any of
+  `.db`, `.sqlite`, `.sqlite3`, `.duckdb`, `.ddb`, a few levels deep in a mount) and listed on the stacks
+  page. They are copied as plain files: pausing makes the copy crash-consistent, not a dump, so test a
+  restore.
 
 **Database dumps** run inside the database container with `docker exec` and
 stream straight into the snapshot (nothing is staged on disk). Credentials
 come from the container's own environment:
 
 | Kind | Command | Credentials |
-|---|---|---|
+| --- | --- | --- |
 | postgres | `pg_dumpall` | `POSTGRES_USER` (default `postgres`), local socket trust |
 | mariadb | `mariadb-dump` / `mysqldump --all-databases --single-transaction` | `MARIADB_ROOT_PASSWORD` or `MYSQL_ROOT_PASSWORD` |
 | redis | `valkey-cli` / `redis-cli --rdb -` | `REDIS_PASSWORD` or `VALKEY_PASSWORD`, if set |
@@ -371,7 +378,7 @@ A **shut-off** VM is copied directly.
 ## Troubleshooting
 
 | Symptom | Look at |
-|---|---|
+| --- | --- |
 | The agent exits at start about `VB_SERVER`/`VB_TOKEN` | It is not approved yet and one of them is missing or malformed |
 | "does not match the token" in the log | `VB_SERVER` points at a different server than the token came from |
 | The agent never shows up under "Waiting for approval" | `VB_SERVER` and the registration port are reachable from this host, and the token is current (it changes when rotated) |
